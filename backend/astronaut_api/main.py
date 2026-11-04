@@ -10,7 +10,7 @@ DATA_DIR=Path(os.getenv("ASTRONAUT_DATA_DIR","./astronaut-data")).resolve()
 DATASETS=DATA_DIR/"datasets"
 DB_PATH=DATA_DIR/"astronaut.sqlite3"
 DATASETS.mkdir(parents=True,exist_ok=True)
-app=FastAPI(title="Astronaut Training API",version="0.1.0",description="Opt-in dataset and fine-tuning control plane")
+app=FastAPI(title="Astronaut Training API",version="0.1.1",description="Opt-in dataset and fine-tuning control plane")
 
 def connect()->sqlite3.Connection:
  db=sqlite3.connect(DB_PATH);db.row_factory=sqlite3.Row;return db
@@ -50,7 +50,7 @@ def validate_jsonl(path:Path)->int:
 
 @app.get("/health")
 def health()->dict[str,str]:
- return {"status":"ok","mode":"training-enabled" if os.getenv("ASTRONAUT_ENABLE_TRAINING")=="1" else "metadata-only"}
+ return {"status":"ok","mode":"metadata-only"}
 
 @app.post("/v1/datasets",response_model=DatasetInfo)
 async def upload_dataset(file:UploadFile=File(...))->DatasetInfo:
@@ -80,9 +80,10 @@ def list_datasets()->list[DatasetInfo]:
 def create_training_job(request:TrainRequest)->dict[str,Any]:
  with connect() as db:
   if db.execute("SELECT id FROM datasets WHERE id=?",(request.dataset_id,)).fetchone() is None:raise HTTPException(404,"Dataset not found")
-  job_id=str(uuid.uuid4());enabled=os.getenv("ASTRONAUT_ENABLE_TRAINING")=="1"
-  state="queued" if enabled else "blocked"
-  message="Queued for a configured worker" if enabled else "Execution disabled; configure a secured GPU worker and enable training explicitly"
+  job_id=str(uuid.uuid4())
+  # Deliberately blocked: this repository does not yet ship a durable, isolated GPU worker.
+  state="blocked"
+  message="Request recorded. No training worker is installed; no training has started."
   db.execute("INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",(job_id,request.dataset_id,request.base_model,request.method,state,0.0,message,request.model_dump_json(),now()))
  return {"id":job_id,"state":state,"progress":0,"message":message}
 
@@ -94,4 +95,4 @@ def get_training_job(job_id:str)->dict[str,Any]:
 
 @app.get("/v1/system/capabilities")
 def capabilities()->dict[str,Any]:
- return {"training_enabled":os.getenv("ASTRONAUT_ENABLE_TRAINING")=="1","torch_installed":importlib.util.find_spec("torch") is not None,"transformers_installed":importlib.util.find_spec("transformers") is not None,"trl_installed":importlib.util.find_spec("trl") is not None,"peft_installed":importlib.util.find_spec("peft") is not None}
+ return {"training_worker_available":False,"training_enabled":False,"torch_installed":importlib.util.find_spec("torch") is not None,"transformers_installed":importlib.util.find_spec("transformers") is not None,"trl_installed":importlib.util.find_spec("trl") is not None,"peft_installed":importlib.util.find_spec("peft") is not None}
