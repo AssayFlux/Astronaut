@@ -10,7 +10,7 @@ DATA_DIR=Path(os.getenv("ASTRONAUT_DATA_DIR","./astronaut-data")).resolve()
 DATASETS=DATA_DIR/"datasets"
 DB_PATH=DATA_DIR/"astronaut.sqlite3"
 DATASETS.mkdir(parents=True,exist_ok=True)
-app=FastAPI(title="Astronaut Training API",version="0.1.1",description="Opt-in dataset and fine-tuning control plane")
+app=FastAPI(title="Astronaut Training API",version="0.2.0",description="Opt-in dataset and fine-tuning control plane")
 
 def connect()->sqlite3.Connection:
  db=sqlite3.connect(DB_PATH);db.row_factory=sqlite3.Row;return db
@@ -49,8 +49,7 @@ def validate_jsonl(path:Path)->int:
  return count
 
 @app.get("/health")
-def health()->dict[str,str]:
- return {"status":"ok","mode":"metadata-only"}
+def health()->dict[str,str]:return {"status":"ok","mode":"metadata-and-optional-worker"}
 
 @app.post("/v1/datasets",response_model=DatasetInfo)
 async def upload_dataset(file:UploadFile=File(...))->DatasetInfo:
@@ -67,8 +66,7 @@ async def upload_dataset(file:UploadFile=File(...))->DatasetInfo:
  except Exception:
   target.unlink(missing_ok=True);raise
  record=DatasetInfo(id=dataset_id,name=Path(filename).stem,filename=filename,sha256=digest.hexdigest(),bytes=size,rows=rows,created_at=now())
- with connect() as db:
-  db.execute("INSERT INTO datasets VALUES(?,?,?,?,?,?,?,?)",(record.id,record.name,record.filename,str(target),record.sha256,record.bytes,record.rows,record.created_at))
+ with connect() as db:db.execute("INSERT INTO datasets VALUES(?,?,?,?,?,?,?,?)",(record.id,record.name,record.filename,str(target),record.sha256,record.bytes,record.rows,record.created_at))
  return record
 
 @app.get("/v1/datasets",response_model=list[DatasetInfo])
@@ -81,10 +79,18 @@ def create_training_job(request:TrainRequest)->dict[str,Any]:
  with connect() as db:
   if db.execute("SELECT id FROM datasets WHERE id=?",(request.dataset_id,)).fetchone() is None:raise HTTPException(404,"Dataset not found")
   job_id=str(uuid.uuid4())
-  # Deliberately blocked: this repository does not yet ship a durable, isolated GPU worker.
-  state="blocked"
-  message="Request recorded. No training worker is installed; no training has started."
+  worker_enabled=os.getenv("ASTRONAUT_ENABLE_TRAINING")=="1" and bool(os.getenv("ASTRONAUT_REDIS_URL"))
+  state="blocked";message="Request recorded; training worker is not configured."
+  if worker_enabled:
+   state="queued";message="Queued for the configured GPU worker."
   db.execute("INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?)",(job_id,request.dataset_id,request.base_model,request.method,state,0.0,message,request.model_dump_json(),now()))
+ if worker_enabled:
+  try:
+   from astronaut_api.worker import celery_app
+   celery_app.send_task("astronaut.train",args=[job_id])
+  except Exception as exc:
+   state="blocked";message=f"Could not enqueue training job: {type(exc).__name__}"
+   with connect() as db:db.execute("UPDATE jobs SET state=?,message=? WHERE id=?",(state,message,job_id))
  return {"id":job_id,"state":state,"progress":0,"message":message}
 
 @app.get("/v1/training/jobs/{job_id}")
@@ -95,4 +101,4 @@ def get_training_job(job_id:str)->dict[str,Any]:
 
 @app.get("/v1/system/capabilities")
 def capabilities()->dict[str,Any]:
- return {"training_worker_available":False,"training_enabled":False,"torch_installed":importlib.util.find_spec("torch") is not None,"transformers_installed":importlib.util.find_spec("transformers") is not None,"trl_installed":importlib.util.find_spec("trl") is not None,"peft_installed":importlib.util.find_spec("peft") is not None}
+ return {"training_worker_configured":os.getenv("ASTRONAUT_ENABLE_TRAINING")=="1" and bool(os.getenv("ASTRONAUT_REDIS_URL")),"torch_installed":importlib.util.find_spec("torch") is not None,"transformers_installed":importlib.util.find_spec("transformers") is not None,"trl_installed":importlib.util.find_spec("trl") is not None,"peft_installed":importlib.util.find_spec("peft") is not None}
