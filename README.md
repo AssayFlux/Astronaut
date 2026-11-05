@@ -64,7 +64,7 @@ The catalog is intentionally disabled until the publisher provisions a real Ed25
 - `ASTRONAUT_CATALOG_URL`: HTTPS URL of the signed catalog envelope.
 - `ASTRONAUT_CATALOG_PUBLIC_KEY`: Base64 X.509 Ed25519 public key.
 
-These are Gradle properties, for example in a local untracked `~/.gradle/gradle.properties` or protected CI configuration. The app needs only the public key. Keep the private signing key in a protected publisher environment; never commit it or package it in the APK. See [model catalog and key management](docs/MODEL_ECOSYSTEM.md).
+These are Gradle properties, for example in a local untracked `~/.gradle/gradle.properties`. In GitHub Actions, expose them as `ORG_GRADLE_PROJECT_ASTRONAUT_CATALOG_URL` and `ORG_GRADLE_PROJECT_ASTRONAUT_CATALOG_PUBLIC_KEY` environment variables. Do not place the private signing key in either configuration. The app needs only the public key. Keep the private signing key in a protected publisher environment; never commit it or package it in the APK. See [model catalog and key management](docs/MODEL_ECOSYSTEM.md).
 
 ## Release signing
 
