@@ -78,7 +78,13 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var activeModelName by remember{mutableStateOf<String?>(null)}
  var runtimeMessage by remember{mutableStateOf("Import a .litertlm model to start offline AI chat.")}
  var voiceListening by remember{mutableStateOf(false)}
- val voiceController=remember(context){OfflineVoiceController(context,onResult={spoken->draft=if(draft.isBlank())spoken else "$draft $spoken"},onError={runtimeMessage=it},onListeningChanged={voiceListening=it})}
+ val speechPrefs=remember(context){context.getSharedPreferences("astronaut_offline_speech",Context.MODE_PRIVATE)}
+ var speechLanguageTag by remember{mutableStateOf(speechPrefs.getString("language_tag",java.util.Locale.getDefault().toLanguageTag())?:java.util.Locale.getDefault().toLanguageTag())}
+ var ttsVoiceName by remember{mutableStateOf(speechPrefs.getString("tts_voice_name",null))}
+ var offlineTtsVoices by remember{mutableStateOf(emptyList<org.offlineai.messenger.features.OfflineTtsVoice>())}
+ var recognitionLanguages by remember{mutableStateOf(org.offlineai.messenger.features.OfflineRecognitionLanguages(emptyList(),emptyList(),emptyList()))}
+ var speechStatus by remember{mutableStateOf("Offline speech is device-managed. Check installed language packs before use.")}
+ val voiceController=remember(context){OfflineVoiceController(context,onResult={spoken->draft=if(draft.isBlank())spoken else "$draft $spoken"},onError={runtimeMessage=it;speechStatus=it},onListeningChanged={voiceListening=it},initialLanguageTag=speechLanguageTag,initialTtsVoiceName=ttsVoiceName,onVoiceCatalogChanged={voices->offlineTtsVoices=voices;if(ttsVoiceName==null)ttsVoiceName=voices.firstOrNull()?.name})}
  var loadingModel by remember{mutableStateOf(false)}
  var sending by remember{mutableStateOf(false)}
  var showNewProject by remember{mutableStateOf(false)}
@@ -437,7 +443,20 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       section=Section.CHATS
      }
     },{id->scope.launch{db.workspaceDao().delete(id)}})
-    Section.SETTINGS->SettingsScreen()
+    Section.SETTINGS->SettingsScreen(
+     speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,
+     {tag->try{
+      val normalized=OfflineVoiceController.normalizeLanguageTag(tag)
+      speechLanguageTag=normalized
+      speechPrefs.edit().putString("language_tag",normalized).apply()
+      voiceController.setLanguageTag(normalized)
+      speechStatus="Language set to $normalized. Check on-device language support."
+     }catch(error:Throwable){speechStatus=error.message?: "Invalid language tag"}},
+     {speechStatus="Checking installed and downloadable on-device language packs…";voiceController.checkRecognitionSupport{support->recognitionLanguages=support;speechStatus="Language support refreshed for $speechLanguageTag."}},
+     {voiceController.downloadRecognitionLanguage{speechStatus=it}},
+     {name->voiceController.setTtsVoice(name);ttsVoiceName=name;speechPrefs.edit().putString("tts_voice_name",name).apply();speechStatus="Offline voice selected."},
+     {voiceController.speak("Astronaut offline speech is ready.")}
+    )
    }
   }}
  }
@@ -648,12 +667,51 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
  }
 }
 
-@Composable private fun SettingsScreen(){Column(Modifier.fillMaxSize().padding(16.dp)){
- Text("Privacy & device",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
- InfoCard("Offline-first","Chat records and model files are stored on this device. Model generation runs locally.")
- InfoCard("No silent uploads","This app does not upload chats or connect to an account or server.")
- InfoCard("Model requirement","Obtain a compatible .litertlm model separately, then import it in Models. Chat generation works offline after model installation.")
-}}
+@Composable private fun SettingsScreen(
+ languageTag:String,
+ selectedVoiceName:String?,
+ voices:List<org.offlineai.messenger.features.OfflineTtsVoice>,
+ recognition:org.offlineai.messenger.features.OfflineRecognitionLanguages,
+ speechStatus:String,
+ onLanguageChange:(String)->Unit,
+ onCheckLanguages:()->Unit,
+ onDownloadLanguage:()->Unit,
+ onVoiceSelect:(String)->Unit,
+ onTestVoice:()->Unit
+){
+ var languageDraft by remember(languageTag){mutableStateOf(languageTag)}
+ var voiceMenu by remember{mutableStateOf(false)}
+ Column(Modifier.fillMaxSize().padding(16.dp)){
+  Text("Privacy & device",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
+  InfoCard("Offline-first","Chat records and model files are stored on this device. Model generation runs locally.")
+  InfoCard("No silent uploads","This app does not upload chats or connect to an account or server.")
+  InfoCard("Model requirement","Obtain a compatible .litertlm model separately, then import it in Models. Chat generation works offline after model installation.")
+  Spacer(Modifier.height(12.dp))
+  Text("Offline voice",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
+  Text("Speech recognition uses Android's on-device recognizer only. Text-to-speech is restricted to installed voices that do not require a network connection.",color=Muted,style=MaterialTheme.typography.bodySmall)
+  OutlinedTextField(languageDraft,{languageDraft=it},modifier=Modifier.fillMaxWidth(),label={Text("Speech language (BCP-47)")},placeholder={Text("en-US, hi-IN, bn-IN")},singleLine=true)
+  Button(onClick={ {onLanguageChange(languageDraft)} },modifier=Modifier.fillMaxWidth()){Text("Apply speech language")}
+  Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+   OutlinedButton(onClick=onCheckLanguages,modifier=Modifier.weight(1f)){Text("Check packs")}
+   Button(onClick=onDownloadLanguage,modifier=Modifier.weight(1f),enabled=recognition.downloadable.isNotEmpty()||recognition.pending.isNotEmpty()){Text("Download pack")}
+  }
+  if(recognition.installed.isNotEmpty())Text("Installed offline ASR: "+recognition.installed.joinToString(),color=Green,style=MaterialTheme.typography.bodySmall)
+  if(recognition.downloadable.isNotEmpty())Text("Available to download: "+recognition.downloadable.joinToString(),color=Muted,style=MaterialTheme.typography.bodySmall)
+  if(recognition.pending.isNotEmpty())Text("Pending: "+recognition.pending.joinToString(),color=Muted,style=MaterialTheme.typography.bodySmall)
+  Text("Offline TTS voice",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+  Box{
+   OutlinedButton(onClick={voiceMenu=true},modifier=Modifier.fillMaxWidth(),enabled=voices.isNotEmpty()){
+    Text(voices.firstOrNull{it.name==selectedVoiceName}?.label?:if(voices.isEmpty())"No offline TTS voices installed" else voices.first().label)
+   }
+   DropdownMenu(expanded=voiceMenu,onDismissRequest={voiceMenu=false}){
+    voices.forEach{voice->DropdownMenuItem(text={Text(voice.label)},onClick={voiceMenu=false;onVoiceSelect(voice.name)})}
+   }
+  }
+  OutlinedButton(onClick=onTestVoice,modifier=Modifier.fillMaxWidth(),enabled=voices.isNotEmpty()){Icon(Icons.Default.VolumeUp,null);Spacer(Modifier.width(8.dp));Text("Test offline voice")}
+  Text(speechStatus,color=Green,style=MaterialTheme.typography.bodySmall)
+  InfoCard("Language pack downloads","On Android 13 and newer, Astronaut can ask the system speech provider to download supported on-device recognition languages. The system provider controls the actual download and availability. Android 12 can use an already-installed on-device recognizer but cannot expose the same pack-management API.")
+ }
+}
 @Composable private fun InfoCard(title:String,body:String){Card(Modifier.fillMaxWidth().padding(bottom=10.dp)){Column(Modifier.padding(16.dp)){Text(title,fontWeight=FontWeight.SemiBold);Spacer(Modifier.height(4.dp));Text(body,color=Muted,style=MaterialTheme.typography.bodyMedium)}}}
 @Composable private fun EmptyState(title:String,body:String){Column(Modifier.fillMaxWidth().padding(vertical=24.dp),horizontalAlignment=Alignment.CenterHorizontally){Text(title,fontWeight=FontWeight.SemiBold);Text(body,color=Muted,style=MaterialTheme.typography.bodySmall)}}
 private fun formatBytes(bytes:Long):String=when{bytes>=1073741824->"%.1f GB".format(bytes/1073741824.0);bytes>=1048576->"%.1f MB".format(bytes/1048576.0);bytes>=1024->"%.1f KB".format(bytes/1024.0);else->"$bytes B"}
