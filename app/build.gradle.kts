@@ -11,8 +11,8 @@ android {
   applicationId="org.offlineai.messenger"
   minSdk=26
   targetSdk=35
-  versionCode=2
-  versionName="0.2.0"
+  versionCode=3
+  versionName="0.3.0"
   testInstrumentationRunner="androidx.test.runner.AndroidJUnitRunner"
  }
  buildFeatures { compose=true }
@@ -36,5 +36,6 @@ dependencies {
  implementation("androidx.work:work-runtime-ktx:2.10.0")
  implementation("io.coil-kt:coil-compose:2.7.0")
  implementation("androidx.media3:media3-exoplayer:1.5.1")
+ implementation("com.google.ai.edge.litertlm:litertlm-android:0.16.1")
  testImplementation("junit:junit:4.13.2")
 }

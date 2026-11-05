@@ -1,4 +1,5 @@
 package org.offlineai.messenger.ui
+
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,23 +23,32 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.launch
+import org.offlineai.messenger.ai.LiteRtRuntime
 import org.offlineai.messenger.data.*
+import java.io.File
+import java.util.UUID
 
 private val Paper=Color(0xFFF4F2EA)
 private val Ink=Color(0xFF17231F)
 private val Green=Color(0xFF176B55)
 private val Muted=Color(0xFF65736D)
-private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WORKSPACE("Workspace"),TRAINING("Training"),SETTINGS("Settings")}
+private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WORKSPACE("Workspace"),SETTINGS("Settings")}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun MessengerApp(){
- val context= LocalContext.current
+ val context=LocalContext.current
  val db= remember{DatabaseProvider.get(context)}
+ val runtime= remember{LiteRtRuntime(context)}
  val scope= rememberCoroutineScope()
  var section by remember{mutableStateOf(Section.CHATS)}
  var selectedConversation by remember{mutableStateOf<Long?>(null)}
  var draft by remember{mutableStateOf("")}
  var pendingAttachment by remember{mutableStateOf<Pair<Uri,String>?>(null)}
+ var activeModelPath by remember{mutableStateOf<String?>(null)}
+ var activeModelName by remember{mutableStateOf<String?>(null)}
+ var runtimeMessage by remember{mutableStateOf("Import a .litertlm model to start offline AI chat.")}
+ var loadingModel by remember{mutableStateOf(false)}
+ var sending by remember{mutableStateOf(false)}
  var showNewProject by remember{mutableStateOf(false)}
  var projectName by remember{mutableStateOf("")}
  var projectDescription by remember{mutableStateOf("")}
@@ -47,6 +57,7 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
  val projects by db.workspaceDao().projects().collectAsState(initial=emptyList())
  val conversationId=selectedConversation?:conversations.firstOrNull()?.id
  val messages by db.chatDao().messages(conversationId?:-1L).collectAsState(initial=emptyList())
+ DisposableEffect(runtime){onDispose{runtime.close()}}
  LaunchedEffect(conversations,selectedConversation){
   if(selectedConversation!=null && conversations.none{it.id==selectedConversation}) selectedConversation=null
   if(selectedConversation==null && conversations.isEmpty()) selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))
@@ -58,9 +69,18 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
   }
  }
  val modelPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
-  if(uri!=null){
-   runCatching{context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}
-   scope.launch{val doc=DocumentFile.fromSingleUri(context,uri);db.modelDao().add(LocalModelEntity(uri.toString(),doc?.name?:"Imported model",context.contentResolver.getType(uri),doc?.length()?:0L))}
+  if(uri!=null) scope.launch{
+   try{
+    val doc=DocumentFile.fromSingleUri(context,uri)
+    val name=doc?.name?: "local-model.litertlm"
+    require(name.endsWith(".litertlm",true)){"Choose a .litertlm model file"}
+    val modelDir=File(context.filesDir,"models").apply{mkdirs()}
+    val safeName=name.replace(Regex("[^A-Za-z0-9._-]"),"_")
+    val target=File(modelDir,UUID.randomUUID().toString()+"-"+safeName)
+    context.contentResolver.openInputStream(uri)?.use{input->target.outputStream().use{output->input.copyTo(output)}}?:error("Cannot read selected file")
+    db.modelDao().add(LocalModelEntity(uri.toString(),name,context.contentResolver.getType(uri),target.length(),modelPath=target.absolutePath))
+    runtimeMessage="Imported $name. Tap Load model to activate it."
+   }catch(error:Throwable){runtimeMessage="Import failed: "+(error.message?:error.javaClass.simpleName)}
   }
  }
  MaterialTheme(colorScheme=lightColorScheme(primary=Green,onPrimary=Color.White,background=Paper,surface=Color.White,onSurface=Ink,secondary=Color(0xFFB7D6C8))){
@@ -69,26 +89,40 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
    Text(section.label,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
   }},actions={if(section==Section.CHATS) IconButton(onClick={scope.launch{selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))}}){Icon(Icons.Default.Add,"New chat")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=Paper))},
    bottomBar={NavigationBar(containerColor=Color.White){Section.entries.forEach{item->
-    val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.MODELS->Icons.Default.Memory;Section.WORKSPACE->Icons.Default.FolderOpen;Section.TRAINING->Icons.Default.Science;Section.SETTINGS->Icons.Default.Settings}
+    val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.MODELS->Icons.Default.Memory;Section.WORKSPACE->Icons.Default.FolderOpen;Section.SETTINGS->Icons.Default.Settings}
     NavigationBarItem(selected=section==item,onClick={section=item},icon={Icon(icon,item.label)},label={Text(item.label,maxLines=1)})
    }}}
   ){padding->Column(Modifier.fillMaxSize().padding(padding)){
    when(section){
-    Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,
+    Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,activeModelName,runtimeMessage,loadingModel,sending,
      {attachmentPicker.launch(arrayOf("*/*"))},{pendingAttachment=null},{selectedConversation=it},{
-      val text=draft.trim();val target=conversationId
-      if((text.isNotEmpty()||pendingAttachment!=null)&&target!=null){
+      val text=draft.trim();val target=conversationId;val attachment=pendingAttachment
+      if((text.isNotEmpty()||attachment!=null)&&target!=null&&!sending){
+       sending=true
        scope.launch{
-        val first=messages.isEmpty()
-        db.chatDao().addMessage(MessageEntity(conversationId=target,body=text,role="user",attachmentUri=pendingAttachment?.first?.toString(),attachmentName=pendingAttachment?.second))
-        if(first&&text.isNotEmpty()) db.chatDao().rename(target,text.take(42))
+        try{
+         db.chatDao().addMessage(MessageEntity(conversationId=target,body=text,role="user",attachmentUri=attachment?.first?.toString(),attachmentName=attachment?.second))
+         if(messages.isEmpty()&&text.isNotEmpty()) db.chatDao().rename(target,text.take(42))
+         if(activeModelPath==null){
+          db.chatDao().addMessage(MessageEntity(conversationId=target,body="No AI model is loaded. Open Models, import a compatible .litertlm file, then tap Load model. Your message is saved on this device.",role="assistant"))
+         }else if(text.isNotEmpty()){
+          try{
+           val answer=runtime.generate(text)
+           db.chatDao().addMessage(MessageEntity(conversationId=target,body=answer.ifBlank{"The model returned an empty response."},role="assistant"))
+          }catch(error:Throwable){db.chatDao().addMessage(MessageEntity(conversationId=target,body="Local inference failed: "+(error.message?:error.javaClass.simpleName),role="assistant",status="error"))}
+         }
+        }finally{draft="";pendingAttachment=null;sending=false}
        }
-       draft="";pendingAttachment=null
       }
      })
-    Section.MODELS->ModelsScreen(models,{modelPicker.launch(arrayOf("*/*"))},{uri->scope.launch{db.modelDao().remove(uri)}})
+    Section.MODELS->ModelsScreen(models,activeModelPath,activeModelName,runtimeMessage,loadingModel,{modelPicker.launch(arrayOf("*/*"))},{model->
+     if(model.modelPath!=null){loadingModel=true;scope.launch{
+      try{runtime.load(model.modelPath);activeModelPath=model.modelPath;activeModelName=model.displayName;runtimeMessage="Loaded "+model.displayName+". Chat is ready offline."}
+      catch(error:Throwable){activeModelPath=null;activeModelName=null;runtimeMessage="Could not load model: "+(error.message?:error.javaClass.simpleName)}
+      finally{loadingModel=false}
+     }}
+    },{model->scope.launch{if(activeModelPath==model.modelPath){runtime.unload();activeModelPath=null;activeModelName=null};model.modelPath?.let{File(it).delete()};db.modelDao().remove(model.uri)}})
     Section.WORKSPACE->WorkspaceScreen(projects,{showNewProject=true},{id->scope.launch{db.workspaceDao().delete(id)}})
-    Section.TRAINING->TrainingScreen()
     Section.SETTINGS->SettingsScreen()
    }
   }}
@@ -101,16 +135,14 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
  }){Text("Create")}},dismissButton={TextButton(onClick={showNewProject=false}){Text("Cancel")}})
 }
 
-@Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onSend:()->Unit){
+@Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,activeModelName:String?,runtimeMessage:String,loading:Boolean,sending:Boolean,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onSend:()->Unit){
  Column(Modifier.fillMaxSize().padding(horizontal=16.dp)){
-  if(conversations.size>1) LazyColumn(Modifier.heightIn(max=112.dp),verticalArrangement=Arrangement.spacedBy(2.dp)){items(conversations){chat->
-   TextButton(onClick={onSelect(chat.id)},modifier=Modifier.fillMaxWidth()){Text((if(chat.id==selectedId)"●  " else "")+chat.title,maxLines=1,overflow=TextOverflow.Ellipsis)}
-  }}
+  if(conversations.size>1) LazyColumn(Modifier.heightIn(max=100.dp),verticalArrangement=Arrangement.spacedBy(2.dp)){items(conversations){chat->TextButton(onClick={onSelect(chat.id)},modifier=Modifier.fillMaxWidth()){Text((if(chat.id==selectedId)"●  " else "")+chat.title,maxLines=1,overflow=TextOverflow.Ellipsis)}}}
   if(messages.isEmpty()) Column(Modifier.weight(1f).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center){
    Box(Modifier.size(68.dp).background(Color(0xFFDCEBE3),CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.AutoAwesome,null,tint=Green,modifier=Modifier.size(32.dp))}
    Spacer(Modifier.height(18.dp));Text("A quieter kind of AI.",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
-   Text("Your conversations stay on this device.",color=Muted)
-   Text("Import a compatible model in Models to prepare local inference.",style=MaterialTheme.typography.bodySmall,color=Muted)
+   Text("Private conversations. On-device intelligence.",color=Muted)
+   Text(runtimeMessage,style=MaterialTheme.typography.bodySmall,color=Muted)
   }else LazyColumn(Modifier.weight(1f).fillMaxWidth(),contentPadding=PaddingValues(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
    items(messages,key={it.id}){message->val mine=message.role=="user"
     Row(Modifier.fillMaxWidth(),horizontalArrangement=if(mine)Arrangement.End else Arrangement.Start){
@@ -131,28 +163,32 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
   Surface(color=Color.White,shape=RoundedCornerShape(24.dp),shadowElevation=2.dp){
    Row(Modifier.padding(start=6.dp,end=8.dp,top=4.dp,bottom=4.dp),verticalAlignment=Alignment.CenterVertically){
     IconButton(onClick=onAttach){Icon(Icons.Default.AttachFile,"Attach file",tint=Muted)}
-    TextField(draft,onDraftChange,Modifier.weight(1f),placeholder={Text("Message privately…")},maxLines=5,colors=TextFieldDefaults.colors(focusedContainerColor=Color.Transparent,unfocusedContainerColor=Color.Transparent,focusedIndicatorColor=Color.Transparent,unfocusedIndicatorColor=Color.Transparent))
-    IconButton(onClick=onSend,enabled=draft.isNotBlank()||attachmentName!=null){Icon(Icons.Default.Send,"Save message",tint=Green)}
+    TextField(draft,onDraftChange,Modifier.weight(1f),placeholder={Text("Message privately…")},maxLines=5,enabled=!sending,colors=TextFieldDefaults.colors(focusedContainerColor=Color.Transparent,unfocusedContainerColor=Color.Transparent,focusedIndicatorColor=Color.Transparent,unfocusedIndicatorColor=Color.Transparent))
+    IconButton(onClick=onSend,enabled=!sending&&(draft.isNotBlank()||attachmentName!=null)){if(sending)CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)else Icon(Icons.Default.Send,"Send",tint=Green)}
    }
   }
-  Text("Messages are saved locally. AI replies are disabled until a real inference runtime is connected.",style=MaterialTheme.typography.labelSmall,color=Muted,modifier=Modifier.padding(top=6.dp,bottom=8.dp))
+  Text("Offline inference "+(if(activeModelName!=null)"· "+activeModelName else "· no model loaded"),style=MaterialTheme.typography.labelSmall,color=Muted,modifier=Modifier.padding(top=6.dp,bottom=8.dp))
  }
 }
 
-@Composable private fun ModelsScreen(models:List<LocalModelEntity>,onImport:()->Unit,onRemove:(String)->Unit){
+@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,onImport:()->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit){
  Column(Modifier.fillMaxSize().padding(16.dp)){
-  Text("Your local model library",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
-  Text("Import a model file from storage. Importing records the file; it does not claim the runtime can load it yet.",color=Muted)
-  Spacer(Modifier.height(14.dp));Button(onClick=onImport,modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import model file")}
-  Spacer(Modifier.height(12.dp))
-  if(models.isEmpty()) EmptyState("No model files imported","Choose a compatible GGUF or LiteRT model file to add it to this library.")
-  LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(models,key={it.uri}){model->
-   Card{Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
-    Icon(Icons.Default.Memory,null,tint=Green,modifier=Modifier.size(30.dp));Spacer(Modifier.width(12.dp))
-    Column(Modifier.weight(1f)){Text(model.displayName,fontWeight=FontWeight.Medium,maxLines=2,overflow=TextOverflow.Ellipsis);Text(formatBytes(model.sizeBytes)+" · Runtime not connected",color=Muted,style=MaterialTheme.typography.labelSmall)}
-    IconButton(onClick={onRemove(model.uri)}){Icon(Icons.Default.DeleteOutline,"Remove model")}
-   }}
-  }}
+  Text("On-device model library",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
+  Text("Import a .litertlm model. Model files stay in app-private storage and are not included in the APK.",color=Muted)
+  Spacer(Modifier.height(14.dp));Button(onClick=onImport,modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import .litertlm model")}
+  Spacer(Modifier.height(10.dp));Text(status,color=Green,style=MaterialTheme.typography.bodySmall)
+  if(loading)LinearProgressIndicator(Modifier.fillMaxWidth())
+  Spacer(Modifier.height(10.dp))
+  if(models.isEmpty())EmptyState("No model imported","Choose a compatible LiteRT-LM .litertlm file. A small model is best for phones.")
+  LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(models,key={it.uri}){model->Card{Column(Modifier.fillMaxWidth().padding(14.dp)){
+   Text(model.displayName,fontWeight=FontWeight.SemiBold,maxLines=2,overflow=TextOverflow.Ellipsis)
+   Text(formatBytes(model.sizeBytes),color=Muted,style=MaterialTheme.typography.labelSmall)
+   Row(verticalAlignment=Alignment.CenterVertically){
+    if(activePath==model.modelPath)Text("ACTIVE · "+activeName,color=Green,modifier=Modifier.weight(1f),style=MaterialTheme.typography.labelSmall) else Spacer(Modifier.weight(1f))
+    TextButton(onClick={onRemove(model)}){Text("Remove")}
+    Button(onClick={onLoad(model)},enabled=!loading&&model.modelPath!=null){Text(if(activePath==model.modelPath)"Reload" else "Load model")}
+   }
+  }} }}
  }
 }
 @Composable private fun WorkspaceScreen(projects:List<WorkspaceProjectEntity>,onAdd:()->Unit,onDelete:(Long)->Unit){
@@ -166,22 +202,12 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
   }} }}
  }
 }
-@Composable private fun TrainingScreen(){
- Column(Modifier.fillMaxSize().padding(16.dp)){
-  Text("AI Training Studio",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
-  Text("Prepare datasets on Android; run fine-tuning on a configured training host.",color=Muted)
-  Spacer(Modifier.height(16.dp))
-  InfoCard("Dataset preparation","A future workflow will validate JSONL/CSV data, remove duplicates and create train/validation splits.")
-  InfoCard("LoRA fine-tuning","Training execution is not enabled in this Android build. It requires a real trainer and compatible GPU or a configured remote worker.")
-  InfoCard("Model promotion","Only evaluated, explicitly approved model artifacts should be installed into the local model library.")
- }
-}
 @Composable private fun SettingsScreen(){Column(Modifier.fillMaxSize().padding(16.dp)){
  Text("Privacy & device",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
- InfoCard("Offline-first","Chat records, imported model references and project metadata are stored in the app's local Room database.")
- InfoCard("No silent uploads","This build contains no account sign-in, analytics upload or automatic chat export.")
- InfoCard("Runtime status","Model file import is available. Actual inference, encryption-at-rest and biometric lock still need implementation and verification.")
+ InfoCard("Offline-first","Chat records and model files are stored on this device. Model generation runs locally.")
+ InfoCard("No silent uploads","This app does not upload chats or connect to an account or server.")
+ InfoCard("Model requirement","Obtain a compatible .litertlm model separately, then import it in Models. Chat generation works offline after model installation.")
 }}
 @Composable private fun InfoCard(title:String,body:String){Card(Modifier.fillMaxWidth().padding(bottom=10.dp)){Column(Modifier.padding(16.dp)){Text(title,fontWeight=FontWeight.SemiBold);Spacer(Modifier.height(4.dp));Text(body,color=Muted,style=MaterialTheme.typography.bodyMedium)}}}
 @Composable private fun EmptyState(title:String,body:String){Column(Modifier.fillMaxWidth().padding(vertical=24.dp),horizontalAlignment=Alignment.CenterHorizontally){Text(title,fontWeight=FontWeight.SemiBold);Text(body,color=Muted,style=MaterialTheme.typography.bodySmall)}}
-private fun formatBytes(bytes:Long):String=when{bytes>=1_073_741_824->"%.1f GB".format(bytes/1_073_741_824.0);bytes>=1_048_576->"%.1f MB".format(bytes/1_048_576.0);bytes>=1024->"%.1f KB".format(bytes/1024.0);else->"$bytes B"}
+private fun formatBytes(bytes:Long):String=when{bytes>=1073741824->"%.1f GB".format(bytes/1073741824.0);bytes>=1048576->"%.1f MB".format(bytes/1048576.0);bytes>=1024->"%.1f KB".format(bytes/1024.0);else->"$bytes B"}
