@@ -450,6 +450,8 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       speechLanguageTag=normalized
       speechPrefs.edit().putString("language_tag",normalized).apply()
       voiceController.setLanguageTag(normalized)
+      ttsVoiceName=voiceController.selectedTtsVoiceName()
+      speechPrefs.edit().putString("tts_voice_name",ttsVoiceName).apply()
       speechStatus="Language set to $normalized. Check on-device language support."
      }catch(error:Throwable){speechStatus=error.message?: "Invalid language tag"}},
      {speechStatus="Checking installed and downloadable on-device language packs…";voiceController.checkRecognitionSupport{support->recognitionLanguages=support;speechStatus="Language support refreshed for $speechLanguageTag."}},
