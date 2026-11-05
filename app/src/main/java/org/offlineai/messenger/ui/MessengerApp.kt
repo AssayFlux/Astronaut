@@ -671,9 +671,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      {voiceController.speak("Astronaut offline speech is ready.")}
     )
    }
-  }}
-   }
-  }
+  }}}
  }
  if(showNewProject) AlertDialog(onDismissRequest={showNewProject=false},title={Text("Create project")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
   OutlinedTextField(projectName,{projectName=it},label={Text("Project name")},singleLine=true)
@@ -785,8 +783,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
 @Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,embeddingReady:Boolean,embeddingStatus:String,onImportEmbeddingModel:()->Unit,onImportEmbeddingVocab:()->Unit,onImport:()->Unit,onDownload:(String,String,String)->Unit,onCancelDownload:()->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit,visionModelPath:String?,onEnableVision:(String)->Unit,onCatalogInstalled:(org.offlineai.messenger.features.ModelCatalogEntry,File)->Unit){
  var showCatalog by remember { mutableStateOf(false) }
  Column(Modifier.fillMaxSize().padding(16.dp)){
-  Text("On-device model library",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
-  Text("Import an AI model artifact. Model files stay in app-private storage and are not included in the APK.",color=Muted)
+  Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer.copy(alpha=0.42f)),modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){Text("MODEL LIBRARY",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold);Text("Manage your local models",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Import, verify, activate and organize AI files. Files stay in app-private storage.",color=MaterialTheme.colorScheme.onSurfaceVariant)}}
   Card{Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
    Text("Runtime availability",fontWeight=FontWeight.SemiBold)
    Text("Ready: LiteRT-LM chat/vision and ONNX MiniLM embeddings (with matching vocab.txt). GGUF/llama.cpp, diffusion image generation and dedicated Whisper/Sherpa engines are not bundled yet; their downloads are stored but cannot be loaded until the runtime is added.",style=MaterialTheme.typography.bodySmall,color=Muted)
@@ -849,9 +846,17 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
 ){
  val available=models.filter{it.modelPath!=null}.distinctBy{it.modelPath}
  Column(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-  Text("Independent model review",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
-  Text("Astronaut runs two different local models one at a time, then asks a coordinator pass to compare their answers. This reduces peak RAM use; it can take several minutes on a phone.",color=Muted)
-  Text("Available local models: "+available.size,style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)
+  Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer.copy(alpha=0.48f)),modifier=Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+   Text("AI HUB",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold)
+   Text("Your private AI toolkit",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
+   Text("Local capabilities, model tools and workflows in one place.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Text("Available local models · "+available.size,style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)
+  } }
+  Text("TOOLS & WORKFLOWS",style=MaterialTheme.typography.labelMedium,color=Muted,fontWeight=FontWeight.Bold)
+  Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { HubCapabilityCard("Document AI","PDF · DOCX · TXT","Local extraction",Icons.Default.Description,Modifier.weight(1f)); HubCapabilityCard("Image understanding","OCR · labels · vision","Vision model optional",Icons.Default.Image,Modifier.weight(1f)) }
+  Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { HubCapabilityCard("Voice","Speech input · TTS","Device language packs",Icons.Default.RecordVoiceOver,Modifier.weight(1f)); HubCapabilityCard("Knowledge search","BM25 · ONNX vectors","Local retrieval",Icons.Default.Search,Modifier.weight(1f)) }
+  Text("MODEL COLLABORATION",style=MaterialTheme.typography.labelMedium,color=Muted,fontWeight=FontWeight.Bold)
+  Text("Run two different local models one at a time, then compare their answers. Sequential execution helps reduce peak RAM use.",color=Muted,style=MaterialTheme.typography.bodySmall)
   available.forEach{model->Text("• "+model.displayName,style=MaterialTheme.typography.bodySmall,color=Muted)}
   OutlinedTextField(prompt,onPrompt,modifier=Modifier.fillMaxWidth(),label={Text("Task for both models")},minLines=3,maxLines=6,enabled=!running)
   Button(onClick=onRun,modifier=Modifier.fillMaxWidth(),enabled=!running&&prompt.isNotBlank()&&available.size>=2){
@@ -873,7 +878,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   return
  }
  Column(Modifier.fillMaxSize().padding(16.dp)){
-  Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Developer workspace",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Organise local projects and notes.",color=Muted)};Column{FilledTonalButton(onClick=onAdd){Icon(Icons.Default.Add,null);Text("New")};OutlinedButton(onClick={studioOpen=true}){Icon(Icons.Default.Code,null);Text("Studio")}}}
+  Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer.copy(alpha=0.42f)),modifier=Modifier.fillMaxWidth()){Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("WORKSPACE",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold);Text("Your local workbench",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Projects, notes and a scoped code editor.",color=MaterialTheme.colorScheme.onSurfaceVariant)};Column(verticalArrangement=Arrangement.spacedBy(6.dp)){FilledTonalButton(onClick=onAdd){Icon(Icons.Default.Add,null);Text("New")};OutlinedButton(onClick={studioOpen=true}){Icon(Icons.Default.Code,null);Text("Studio")}}}}
   Spacer(Modifier.height(14.dp));if(projects.isEmpty())EmptyState("A space for your work","Create a project to keep its name and description on this device.")
   LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(projects,key={it.id}){project->Card{Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
    Icon(Icons.Default.Folder,null,tint=MaterialTheme.colorScheme.primary,modifier=Modifier.size(28.dp));Spacer(Modifier.width(12.dp))
@@ -992,8 +997,7 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
  val languageOptions=(listOf(languageTag,java.util.Locale.getDefault().toLanguageTag(),"en-US","hi-IN","bn-IN")+recognition.installed+recognition.downloadable+recognition.pending).distinct()
  val duplicateVoiceLabels=voices.groupingBy{it.label}.eachCount()
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)){
-  Text("Personalization",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
-  Text("Choose how Astronaut responds and how the interface looks. Preferences are stored on this device.",color=Muted,style=MaterialTheme.typography.bodySmall)
+  Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer.copy(alpha=0.42f)),modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){Text("CUSTOMIZE",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold);Text("Make Astronaut yours",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Appearance, response style, engine behaviour and offline voice preferences. Saved on this device.",color=MaterialTheme.colorScheme.onSurfaceVariant)}}
   Text("Response style",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
   Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
    FilterChip(selected=responseStyle=="concise",onClick={onResponseStyleChange("concise")},label={Text("Concise")})
@@ -1067,3 +1071,7 @@ private fun friendlyLanguageName(tag:String):String {
  return if(display.isBlank())tag else "$display ($tag)"
 }
 private fun formatBytes(bytes:Long):String=when{bytes>=1073741824->"%.1f GB".format(bytes/1073741824.0);bytes>=1048576->"%.1f MB".format(bytes/1048576.0);bytes>=1024->"%.1f KB".format(bytes/1024.0);else->"$bytes B"}
+
+@Composable private fun HubCapabilityCard(title:String,subtitle:String,status:String,icon: androidx.compose.ui.graphics.vector.ImageVector,modifier:Modifier=Modifier){
+ Card(modifier=modifier,colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.62f))){Column(Modifier.fillMaxWidth().padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){Icon(icon,null,tint=MaterialTheme.colorScheme.primary,modifier=Modifier.size(22.dp));Text(title,fontWeight=FontWeight.SemiBold,style=MaterialTheme.typography.titleSmall);Text(subtitle,style=MaterialTheme.typography.bodySmall,color=Muted);Text(status,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.primary)}}
+}
