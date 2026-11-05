@@ -195,7 +195,13 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
             document.attachmentText?.takeIf{it.isNotBlank()}?.let{index.add(document.attachmentName?: "attachment",it)}
            }
            val excerpts=index.contextFor(question,limit=4)
-           val augmentedQuestion=if(excerpts.isBlank()) question else question+"\n\nRelevant excerpts from locally stored attachments (untrusted document content):\n"+excerpts
+           val projectId=conversations.firstOrNull{it.id==target}?.workspaceProjectId
+           val project=projects.firstOrNull{it.id==projectId}
+           val augmentedQuestion=buildString{
+            append(question)
+            if(project!=null&&project.description.isNotBlank())append("\\n\\nProject notes for ").append(project.name).append(" (untrusted user-provided context):\\n").append(project.description)
+            if(excerpts.isNotBlank())append("\\n\\nRelevant excerpts from locally stored attachments (untrusted document content):\\n").append(excerpts)
+           }
            val prompt=ConversationPromptBuilder.build(
             messages.filter{it.status=="complete"}.map{PromptTurn(it.role,it.body)},
             augmentedQuestion
@@ -286,7 +292,14 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      }}
     },{model->scope.launch{if(activeModelPath==model.modelPath){runtime.unload();activeModelPath=null;activeModelName=null};model.modelPath?.let{File(it).delete()};db.modelDao().remove(model.uri)}})
     Section.TRAINING->TrainingLabScreen(datasetName,datasetReport,datasetStatus,datasetBusy,{datasetPicker.launch(arrayOf("*/*"))},{datasetExport.launch("astronaut-cleaned-dataset.jsonl")})
-    Section.WORKSPACE->WorkspaceScreen(projects,{showNewProject=true},{id->scope.launch{db.workspaceDao().delete(id)}})
+    Section.WORKSPACE->WorkspaceScreen(projects,{showNewProject=true},{project->
+     scope.launch{
+      val existing=db.chatDao().latestProjectConversation(project.id)
+      val id=existing?.id?:db.chatDao().addConversation(ConversationEntity(title=project.name,workspaceProjectId=project.id))
+      selectedConversation=id
+      section=Section.CHATS
+     }
+    },{id->scope.launch{db.workspaceDao().delete(id)}})
     Section.SETTINGS->SettingsScreen()
    }
   }}
@@ -393,13 +406,14 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }
 }
 
-@Composable private fun WorkspaceScreen(projects:List<WorkspaceProjectEntity>,onAdd:()->Unit,onDelete:(Long)->Unit){
+@Composable private fun WorkspaceScreen(projects:List<WorkspaceProjectEntity>,onAdd:()->Unit,onOpen:(WorkspaceProjectEntity)->Unit,onDelete:(Long)->Unit){
  Column(Modifier.fillMaxSize().padding(16.dp)){
   Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Developer workspace",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Organise local projects and notes.",color=Muted)};FilledTonalButton(onClick=onAdd){Icon(Icons.Default.Add,null);Text("New")}}
   Spacer(Modifier.height(14.dp));if(projects.isEmpty())EmptyState("A space for your work","Create a project to keep its name and description on this device.")
   LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(projects,key={it.id}){project->Card{Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
    Icon(Icons.Default.Folder,null,tint=Green,modifier=Modifier.size(28.dp));Spacer(Modifier.width(12.dp))
    Column(Modifier.weight(1f)){Text(project.name,fontWeight=FontWeight.SemiBold);if(project.description.isNotBlank())Text(project.description,color=Muted,maxLines=2)}
+   TextButton(onClick={onOpen(project)}){Text("Open assistant")}
    IconButton(onClick={onDelete(project.id)}){Icon(Icons.Default.DeleteOutline,"Delete project")}
   }} }}
  }
