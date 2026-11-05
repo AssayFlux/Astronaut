@@ -32,6 +32,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -135,6 +137,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var collaborationStatus by remember{mutableStateOf("Import two distinct compatible .litertlm models to enable collaboration.")}
  var collaborating by remember{mutableStateOf(false)}
  var downloadingModel by remember{mutableStateOf(false)}
+ var modelDownloadJob by remember{mutableStateOf<Job?>(null)}
  var downloadProgress by remember{mutableFloatStateOf(0f)}
  var downloadStatus by remember{mutableStateOf("")}
  var datasetContent by remember{mutableStateOf("")}
@@ -488,7 +491,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      {url,checksum,name->
       if(!downloadingModel){
        downloadingModel=true;downloadProgress=0f;downloadStatus="Connecting to HTTPS model host…"
-       scope.launch{
+       modelDownloadJob=scope.launch{
         try{
          val result=VerifiedModelDownloader(context).download(url,checksum,name){downloaded,total->
           downloadProgress=if(total!=null&&total>0)(downloaded.toFloat()/total).coerceIn(0f,1f)else 0f
@@ -502,11 +505,13 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
           embeddingStatus="ONNX artifact downloaded and verified. Import its matching vocab.txt to enable MiniLM semantic retrieval."
           runtimeMessage="Downloaded and verified "+name+". Configured as an ONNX embedding artifact, not a chat model."
          }else runtimeMessage="Downloaded and verified "+name+". Tap Load model only if its compatible runtime is bundled."
-        }catch(error:Throwable){downloadStatus="Download failed: "+(error.message?:error.javaClass.simpleName)}
-        finally{downloadingModel=false}
+        }catch(cancelled:CancellationException){throw cancelled}
+        catch(error:Exception){downloadStatus="Download failed: "+(error.message?:error.javaClass.simpleName)}
+        finally{downloadingModel=false;modelDownloadJob=null}
        }
       }
      },
+     {modelDownloadJob?.cancel();downloadStatus="Download cancelled. Partial bytes remain private and can be resumed."},
      {model->
 
      if(model.modelPath!=null){loadingModel=true;scope.launch{
@@ -730,7 +735,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }
 }
 
-@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,embeddingReady:Boolean,embeddingStatus:String,onImportEmbeddingModel:()->Unit,onImportEmbeddingVocab:()->Unit,onImport:()->Unit,onDownload:(String,String,String)->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit,visionModelPath:String?,onEnableVision:(String)->Unit,onCatalogInstalled:(org.offlineai.messenger.features.ModelCatalogEntry,File)->Unit){
+@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,embeddingReady:Boolean,embeddingStatus:String,onImportEmbeddingModel:()->Unit,onImportEmbeddingVocab:()->Unit,onImport:()->Unit,onDownload:(String,String,String)->Unit,onCancelDownload:()->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit,visionModelPath:String?,onEnableVision:(String)->Unit,onCatalogInstalled:(org.offlineai.messenger.features.ModelCatalogEntry,File)->Unit){
  var showCatalog by remember { mutableStateOf(false) }
  Column(Modifier.fillMaxSize().padding(16.dp)){
   Text("On-device model library",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
@@ -760,7 +765,10 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   OutlinedTextField(downloadSha,{downloadSha=it},modifier=Modifier.fillMaxWidth(),label={Text("SHA-256 checksum (64 hex characters)")},singleLine=true,enabled=!downloading)
   OutlinedTextField(downloadName,{downloadName=it},modifier=Modifier.fillMaxWidth(),label={Text("Filename with supported extension")},singleLine=true,enabled=!downloading)
   Button(onClick={onDownload(downloadUrl.trim(),downloadSha.trim(),downloadName.trim())},modifier=Modifier.fillMaxWidth(),enabled=!downloading&&downloadUrl.startsWith("https://")&&downloadSha.matches(Regex("[A-Fa-f0-9]{64}"))&&downloadName.matches(Regex("(?i).+\\.(litertlm|gguf|onnx|tflite|safetensors|zip|bin|ggml)"))){if(downloading)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)else Icon(Icons.Default.Download,null);Spacer(Modifier.width(8.dp));Text(if(downloading)"Downloading…" else "Download and verify")}
-  if(downloading&&downloadProgress>0f)LinearProgressIndicator(progress=downloadProgress,modifier=Modifier.fillMaxWidth())
+  if(downloading&&downloadProgress>0f)LinearProgressIndicator(progress={downloadProgress},modifier=Modifier.fillMaxWidth())
+  if(downloading)OutlinedButton(onClick=onCancelDownload,modifier=Modifier.fillMaxWidth()){
+   Icon(Icons.Default.Close,null);Spacer(Modifier.width(8.dp));Text("Cancel download")
+  }
   if(downloadStatus.isNotBlank())Text(downloadStatus,color=Green,style=MaterialTheme.typography.bodySmall)
   Spacer(Modifier.height(10.dp));Text(status,color=Green,style=MaterialTheme.typography.bodySmall)
   if(loading)LinearProgressIndicator(Modifier.fillMaxWidth())
