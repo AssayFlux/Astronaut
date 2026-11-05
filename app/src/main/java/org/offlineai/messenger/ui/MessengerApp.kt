@@ -697,8 +697,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var modelDraft by remember(modelId){mutableStateOf(modelId)}
  var keyDraft by remember{mutableStateOf("")}
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
-  Text("Online AI providers",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
-  Text("Connect an OpenAI-compatible endpoint. This supports providers that expose the Chat Completions API, including provider-hosted free tiers where available.",color=Muted)
+  Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer.copy(alpha=0.42f)),modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){Text("REMOTE PROVIDER",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold);Text("Optional online AI",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Off by default. Configure a compatible endpoint and explicitly enable remote inference.",color=MaterialTheme.colorScheme.onSurfaceVariant)}}
   Card{Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
    Text("Privacy boundary",fontWeight=FontWeight.SemiBold)
    Text("When Online mode is enabled, Astronaut sends only the current text prompt and selected model ID. It does NOT send previous chat messages, project notes, local documents, images or attachments. Requests go to the endpoint you configure. Provider pricing, free quotas and data retention are controlled by that provider.",style=MaterialTheme.typography.bodySmall,color=Muted)
@@ -902,8 +901,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  onCancelTraining:(String,String,String)->Unit
 ){
  Column(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-  Text("Training data lab",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
-  Text("Import JSONL examples, validate their structure and export a cleaned dataset. Files are processed on this device.",color=Muted)
+  Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer.copy(alpha=0.42f)),modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){Text("TRAINING LAB",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold);Text("Prepare local datasets",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Validate, clean and optionally send datasets to your own workstation training server.",color=MaterialTheme.colorScheme.onSurfaceVariant)}}
   Button(onClick=onImport,modifier=Modifier.fillMaxWidth(),enabled=!busy){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import JSONL dataset")}
   if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
   if(report!=null){
@@ -1063,7 +1061,7 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
   InfoCard("Language pack downloads","On Android 13 and newer, Astronaut can ask the system speech provider to download supported on-device recognition languages. The system provider controls the actual download and availability. Android 12 can use an already-installed on-device recognizer but cannot expose the same pack-management API.")
  }
 }
-@Composable private fun InfoCard(title:String,body:String){Card(Modifier.fillMaxWidth().padding(bottom=10.dp)){Column(Modifier.padding(16.dp)){Text(title,fontWeight=FontWeight.SemiBold);Spacer(Modifier.height(4.dp));Text(body,color=Muted,style=MaterialTheme.typography.bodyMedium)}}}
+@Composable private fun InfoCard(title:String,body:String){Card(Modifier.fillMaxWidth().padding(bottom=10.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.58f))){Column(Modifier.padding(16.dp)){Text(title,fontWeight=FontWeight.SemiBold);Spacer(Modifier.height(4.dp));Text(body,color=Muted,style=MaterialTheme.typography.bodyMedium)}}}
 @Composable private fun EmptyState(title:String,body:String){Column(Modifier.fillMaxWidth().padding(vertical=24.dp),horizontalAlignment=Alignment.CenterHorizontally){Text(title,fontWeight=FontWeight.SemiBold);Text(body,color=Muted,style=MaterialTheme.typography.bodySmall)}}
 private fun friendlyLanguageName(tag:String):String {
  val locale=java.util.Locale.forLanguageTag(tag)
