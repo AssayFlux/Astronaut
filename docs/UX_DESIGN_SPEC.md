@@ -2,7 +2,7 @@
 
 ## Product personality
 
-A premium, calm, precise AI messenger. Familiar chat ergonomics, but not a WhatsApp clone. Use a warm paper surface, deep forest-green primary accent, restrained borders, strong typography and high information clarity. Provide light, dark and paper themes.
+A premium, calm, precise AI messenger. Familiar chat ergonomics, but not a WhatsApp clone. Use a neutral, spacious surface, restrained borders, strong typography and high information clarity. Provide light/dark appearance and user-selectable Mint, Blue, Violet, Amber or Graphite accent colours. The chat should feel like a focused AI workspace, not a WhatsApp reskin.
 
 ## Information architecture
 
@@ -19,12 +19,13 @@ Workspace landing page contains Projects, Files, Backend Developer Studio and AI
 ## Chat screen
 
 - Top app bar: conversation title, model/collaboration indicator, search and overflow actions.
-- Message timeline: distinct user/assistant surfaces, timestamps, reply threading and attachment cards.
+- Message timeline: distinct user/assistant surfaces, a compact conversation switcher and clear attachment cards; avoid copying WhatsApp's chat-list strip or signature green bubble styling.
 - Assistant response header: final synthesis state plus expandable collaboration details.
 - Collaboration detail: actual participant model IDs, capability, runtime, start/end time, duration, status, review notes and failures. Only display data recorded by the execution engine.
 - Composer: multiline input, attach, voice, send/stop. Support draft preservation and keyboard insets.
 - Streaming: render incremental text, show cancel, persist partial output on cancellation with a cancelled status.
 - Empty state: explain local model setup and offer model library navigation; do not show a fabricated AI reply.
+- Personalisation: light/dark appearance, accent colour, response detail, readable speech-language names and offline TTS voice previews.
 
 ## AI Hub
 
