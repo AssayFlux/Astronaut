@@ -1,6 +1,7 @@
 package org.offlineai.messenger.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -25,7 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.offlineai.messenger.ai.LiteRtRuntime
 import org.offlineai.messenger.ai.ConversationPromptBuilder
 import org.offlineai.messenger.ai.PromptTurn
@@ -42,6 +45,9 @@ import org.offlineai.messenger.features.OfflineImageAnalyzer
 import org.offlineai.messenger.features.LocalRagIndex
 import org.offlineai.messenger.features.OfflineVoiceController
 import org.offlineai.messenger.features.VerifiedModelDownloader
+import org.offlineai.messenger.features.OfflineDatasetInspector
+import org.offlineai.messenger.features.DatasetReport
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 
@@ -49,7 +55,7 @@ private val Paper=Color(0xFFF4F2EA)
 private val Ink=Color(0xFF17231F)
 private val Green=Color(0xFF176B55)
 private val Muted=Color(0xFF65736D)
-private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MODELS("Models"),WORKSPACE("Workspace"),SETTINGS("Settings")}
+private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MODELS("Models"),TRAINING("Training"),WORKSPACE("Workspace"),SETTINGS("Settings")}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun MessengerApp(){
@@ -77,6 +83,11 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var downloadingModel by remember{mutableStateOf(false)}
  var downloadProgress by remember{mutableFloatStateOf(0f)}
  var downloadStatus by remember{mutableStateOf("")}
+ var datasetContent by remember{mutableStateOf("")}
+ var datasetName by remember{mutableStateOf("")}
+ var datasetReport by remember{mutableStateOf<DatasetReport?>(null)}
+ var datasetStatus by remember{mutableStateOf("")}
+ var datasetBusy by remember{mutableStateOf(false)}
  val conversations by db.chatDao().conversations().collectAsState(initial=emptyList())
  val models by db.modelDao().models().collectAsState(initial=emptyList())
  val projects by db.workspaceDao().projects().collectAsState(initial=emptyList())
@@ -94,6 +105,33 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   if(uri!=null){
    runCatching{context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}
    pendingAttachment=uri to (DocumentFile.fromSingleUri(context,uri)?.name?:"Attachment")
+  }
+ }
+ val datasetPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
+  if(uri!=null) scope.launch{
+   datasetBusy=true
+   try{
+    val name=DocumentFile.fromSingleUri(context,uri)?.name?:"dataset.jsonl"
+    val content=readDatasetBounded(context,uri)
+    datasetContent=content
+    datasetName=name
+    datasetReport=OfflineDatasetInspector.inspect(content)
+    datasetStatus="Validated "+name+" locally. No dataset was uploaded."
+   }catch(error:Throwable){datasetReport=null;datasetStatus="Dataset import failed: "+(error.message?:error.javaClass.simpleName)}
+   finally{datasetBusy=false}
+  }
+ }
+ val datasetExport=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")){uri->
+  if(uri!=null) scope.launch{
+   datasetBusy=true
+   try{
+    val report=datasetReport?:error("Import and validate a dataset first.")
+    val invalid=report.invalidLines.toSet()
+    val clean=datasetContent.lineSequence().mapIndexedNotNull{index,line->if(line.isNotBlank()&&index+1 !in invalid)line else null}.joinToString("\n")
+    withContext(Dispatchers.IO){context.contentResolver.openOutputStream(uri)?.use{it.write(clean.toByteArray(Charsets.UTF_8))}?:error("Cannot create dataset output file.")}
+    datasetStatus="Exported "+report.validRecords+" valid JSONL records."
+   }catch(error:Throwable){datasetStatus="Dataset export failed: "+(error.message?:error.javaClass.simpleName)}
+   finally{datasetBusy=false}
   }
  }
  val modelPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
@@ -117,7 +155,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    Text(section.label,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
   }},actions={if(section==Section.CHATS) IconButton(onClick={scope.launch{selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))}}){Icon(Icons.Default.Add,"New chat")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=Paper))},
    bottomBar={NavigationBar(containerColor=Color.White){Section.entries.forEach{item->
-    val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.WORKSPACE->Icons.Default.FolderOpen;Section.SETTINGS->Icons.Default.Settings}
+    val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.TRAINING->Icons.Default.Tune;Section.WORKSPACE->Icons.Default.FolderOpen;Section.SETTINGS->Icons.Default.Settings}
     NavigationBarItem(selected=section==item,onClick={section=item},icon={Icon(icon,item.label)},label={Text(item.label,maxLines=1)})
    }}}
   ){padding->Column(Modifier.fillMaxSize().padding(padding)){
@@ -143,7 +181,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
            val analyzer=OfflineImageAnalyzer(context)
            try{analyzer.analyze(selected.first)}finally{analyzer.close()}
           }else ""
-          listOf(extractedText,imageLabels).filter{it.isNotBlank()}.joinToString("\\n\\n").take(100_000).also{require(it.isNotBlank()){"No readable text or image labels were found."}}
+          listOf(extractedText,imageLabels).filter{it.isNotBlank()}.joinToString("\n\n").take(100_000).also{require(it.isNotBlank()){"No readable text or image labels were found."}}
          }
          if(extractedAttachment!=null) db.chatDao().updateAttachmentText(userMessageId,extractedAttachment)
          if(messages.isEmpty()&&(text.isNotEmpty()||attachment!=null)) db.chatDao().rename(target,(text.ifBlank{attachment?.second.orEmpty()}).take(42))
@@ -193,10 +231,10 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
         when(result){
          is CollaborationResult.Success->{
           val report=buildString{
-           append("TWO-MODEL REVIEW\\n\\n")
+           append("TWO-MODEL REVIEW\n\n")
            result.participants.forEachIndexed{index,answer->
-            append("Independent model ").append(index+1).append(": ").append(answer.modelId).append(" (").append(answer.elapsedMs).append(" ms)\\n")
-            append(answer.text).append("\\n\\n")
+            append("Independent model ").append(index+1).append(": ").append(answer.modelId).append(" (").append(answer.elapsedMs).append(" ms)\n")
+            append(answer.text).append("\n\n")
            }
            append("COORDINATOR SYNTHESIS\\n").append(result.finalAnswer)
           }
@@ -247,6 +285,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       finally{loadingModel=false}
      }}
     },{model->scope.launch{if(activeModelPath==model.modelPath){runtime.unload();activeModelPath=null;activeModelName=null};model.modelPath?.let{File(it).delete()};db.modelDao().remove(model.uri)}})
+    Section.TRAINING->TrainingLabScreen(datasetName,datasetReport,datasetStatus,datasetBusy,{datasetPicker.launch(arrayOf("*/*"))},{datasetExport.launch("astronaut-cleaned-dataset.jsonl")})
     Section.WORKSPACE->WorkspaceScreen(projects,{showNewProject=true},{id->scope.launch{db.workspaceDao().delete(id)}})
     Section.SETTINGS->SettingsScreen()
    }
@@ -365,6 +404,56 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   }} }}
  }
 }
+@Composable private fun TrainingLabScreen(
+ datasetName:String,
+ report:DatasetReport?,
+ status:String,
+ busy:Boolean,
+ onImport:()->Unit,
+ onExport:()->Unit
+){
+ Column(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+  Text("Training data lab",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
+  Text("Import JSONL examples, validate their structure and export a cleaned dataset. Files are processed on this device.",color=Muted)
+  Button(onClick=onImport,modifier=Modifier.fillMaxWidth(),enabled=!busy){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import JSONL dataset")}
+  if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+  if(report!=null){
+   Text(datasetName,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+   Card(Modifier.fillMaxWidth()){
+    Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+     Text("Valid records: "+report.validRecords,style=MaterialTheme.typography.titleMedium,color=Green)
+     Text("Training split: "+report.trainRecords)
+     Text("Validation split: "+report.validationRecords)
+     Text("Invalid lines: "+report.invalidLines.size,color=if(report.invalidLines.isEmpty())Green else Color(0xFF9A4D27))
+     if(report.invalidLines.isNotEmpty())Text("Invalid line numbers: "+report.invalidLines.take(20).joinToString(", "),color=Muted,style=MaterialTheme.typography.bodySmall)
+    }
+   }
+   Button(onClick=onExport,modifier=Modifier.fillMaxWidth(),enabled=!busy&&report.validRecords>0){Icon(Icons.Default.FileDownload,null);Spacer(Modifier.width(8.dp));Text("Export cleaned JSONL")}
+  }else EmptyState("No dataset loaded","Choose a JSONL file containing text, prompt, or messages fields.")
+  if(status.isNotBlank())Text(status,color=Green,style=MaterialTheme.typography.bodySmall)
+  Divider()
+  Text("Training execution is not running on this phone yet. This screen validates and prepares datasets only; it does not simulate a training job or change model weights. The workstation training backend and model export pipeline are the next stage.",color=Muted,style=MaterialTheme.typography.bodySmall)
+ }
+}
+
+private const val MAX_DATASET_BYTES = 20 * 1024 * 1024
+private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withContext(Dispatchers.IO){
+ val input=context.contentResolver.openInputStream(uri)?:error("Cannot open dataset file")
+ input.use{stream->
+  val output=ByteArrayOutputStream()
+  val buffer=ByteArray(8192)
+  var total=0
+  while(true){
+   val count=stream.read(buffer)
+   if(count<0)break
+   total+=count
+   require(total<=MAX_DATASET_BYTES){"Dataset exceeds the 20 MiB import limit."}
+   output.write(buffer,0,count)
+  }
+  String(output.toByteArray(),Charsets.UTF_8)
+ }
+}
+
 @Composable private fun SettingsScreen(){Column(Modifier.fillMaxSize().padding(16.dp)){
  Text("Privacy & device",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
  InfoCard("Offline-first","Chat records and model files are stored on this device. Model generation runs locally.")
