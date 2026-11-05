@@ -635,8 +635,8 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     Section.SETTINGS->SettingsScreen(
      speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,responseStyle,darkAppearance,accentName,
      {style->responseStyle=style;personalizationPrefs.edit().putString("response_style",style).apply()},
-     {enabled->darkAppearance=enabled;personalizationPrefs.edit().putBoolean("dark_appearance",enabled).apply()},
      {name->accentName=name;personalizationPrefs.edit().putString("accent_name",name).apply()},
+     {enabled->darkAppearance=enabled;personalizationPrefs.edit().putBoolean("dark_appearance",enabled).apply()},
      {tag->try{
       val normalized=OfflineVoiceController.normalizeLanguageTag(tag)
       speechLanguageTag=normalized
@@ -720,7 +720,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       text={Text(chat.title,maxLines=1,overflow=TextOverflow.Ellipsis)},
       leadingIcon={Icon(if(chat.id==selectedId)Icons.Default.CheckCircle else Icons.Default.ChatBubbleOutline,null)},
       trailingIcon={IconButton(onClick={pendingDelete=chat.id;historyExpanded=false}){Icon(Icons.Default.DeleteOutline,"Delete conversation")}},
-      onClick={onSelect(chat.id).also{historyExpanded=false}}
+      onClick={onSelect(chat.id);historyExpanded=false}
      )}
     }
    }
@@ -736,7 +736,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     Row(Modifier.fillMaxWidth(),horizontalArrangement=if(mine)Arrangement.End else Arrangement.Start){
      Surface(color=if(mine)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,shape=RoundedCornerShape(if(mine)22.dp else 16.dp),modifier=Modifier.widthIn(max=340.dp)){
       Column(Modifier.padding(14.dp)){
-       if(message.body.isNotBlank()) Text(message.body,color=Ink)
+       if(message.body.isNotBlank()) Text(message.body,color=MaterialTheme.colorScheme.onSurface)
        if(!mine&&message.body.isNotBlank()) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End){IconButton(onClick={onSpeak(message.body)}){Icon(Icons.Default.VolumeUp,"Read response aloud",tint=Green)}}
        if(message.attachmentName!=null){Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.AttachFile,null,tint=Green,modifier=Modifier.size(16.dp));Text(message.attachmentName,color=Green,style=MaterialTheme.typography.labelMedium)}}
        Text(if(mine)"You" else "Astronaut",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.primary)
