@@ -1,4 +1,4 @@
-# ASTRONAUT
+# THE  ASTRONAUT
 
 <p align="center">
   <img src="Assets/icon.svg" alt="Astronaut app icon" width="300" />
