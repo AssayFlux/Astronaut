@@ -8,7 +8,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 /**
  * Explicit migrations preserve conversations, model records and workspace projects.
  * Schema history: v1 had conversations/messages; v2 added model/workspace tables and
- * the message conversation index; v3 added local_models.modelPath.
+ * the message conversation index; v3 added local_models.modelPath; v4 added attachmentText;
+ * v5 links conversations to workspace projects.
  */
 private val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
