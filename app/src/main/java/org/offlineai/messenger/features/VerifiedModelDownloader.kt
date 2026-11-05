@@ -87,8 +87,8 @@ class VerifiedModelDownloader(context: Context) {
                     "SHA-256 mismatch. Expected $expectedSha256 but received $actual. The file was discarded."
                 }
                 val target = File(modelDirectory, actual.take(16) + "-" + safeName)
-                if (target.exists()) temporary.delete()
-                else check(temporary.renameTo(target)) { "Could not move the verified model into private storage." }
+                target.delete()
+                check(temporary.renameTo(target)) { "Could not move the verified model into private storage." }
                 withContext(Dispatchers.Main) { onProgress(downloaded, total ?: downloaded) }
                 return@withContext DownloadedModel(target, actual, downloaded)
             }
