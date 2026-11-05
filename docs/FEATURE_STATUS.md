@@ -12,7 +12,7 @@ This file distinguishes implemented code from behavior that still requires hardw
 | LiteRT-LM model import/load/unload and local text inference | Implemented | Test supported model files, token generation, low-RAM behavior and lifecycle on device |
 | PDF, DOCX, text and image attachment extraction | Implemented | OCR accuracy and large-file behavior require device tests |
 | Image OCR and ML Kit image labels | Implemented | Not visual Q&A, captioning, chart reading or diagram reasoning |
-| Local attachment retrieval | Implemented (lexical BM25) | Not neural embedding/vector semantic search; source labels are chunk-level |
+| Local attachment retrieval | BM25 fallback plus optional ONNX WordPiece embeddings, hybrid cosine/BM25 ranking, encrypted persistent chunks and page labels | Requires a compatible user-imported ONNX embedding model + matching vocab; model compatibility and quality need device validation |
 | Offline speech input and TTS wrappers/UI | Implemented | Requires Android 12+ on-device recognizer and installed offline language/TTS voices |
 | SHA-256 verified HTTPS model download | Implemented | User must obtain checksum from a trusted publisher; no signed curated catalog |
 | Sequential two-model review | Implemented | Requires two compatible imported models; sequential execution, not parallel agents |
@@ -42,7 +42,7 @@ This file distinguishes implemented code from behavior that still requires hardw
 
 ## Remaining product work (not represented as completed)
 
-1. Neural embedding model + persistent vector index for semantic RAG.
+1. Validate the new ONNX semantic RAG path with a known MiniLM-compatible model on physical devices; add more tokenizer/model export variants and quality benchmarks.
 2. A genuine local vision-language model integration for image Q&A, charts and diagrams.
 3. Broader offline ASR/TTS model management beyond Android system speech services.
 4. Signed model catalog with compatibility metadata, provenance and automatic update policy.

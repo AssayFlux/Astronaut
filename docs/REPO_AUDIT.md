@@ -22,7 +22,7 @@ This audit supersedes earlier snapshots in this file. It reflects the current `m
 | Model acquisition | Import flow and HTTPS download with SHA-256 verification | No signed curated catalog; user must trust the URL/checksum source |
 | Documents | PDF page OCR, DOCX extraction, bounded text reads | OCR does not recover all layouts/tables reliably |
 | Images | ML Kit OCR and image labels | Not image Q&A, captioning, chart/diagram reasoning or general vision-language understanding |
-| Retrieval | Local BM25 lexical ranking over stored attachment text, with source/chunk labels | Not embedding/vector semantic retrieval; index is rebuilt from saved attachment text for a request |
+| Retrieval | BM25 fallback plus optional ONNX WordPiece embeddings, hybrid cosine/BM25 ranking, encrypted persistent chunks and source/page labels | Requires a compatible user-imported ONNX model and matching vocab; validate model compatibility, quality and device performance |
 | Voice | Android speech-recognition and TTS integration | Offline support depends on device speech services and installed offline language/voice packs |
 | Collaboration | Sequential two-model review and coordinator synthesis | Requires multiple compatible imported models; not parallel autonomous agents |
 | Training UI | Dataset inspection and training API client/status UI | Requires separately deployed backend |
@@ -46,7 +46,7 @@ This audit supersedes earlier snapshots in this file. It reflects the current `m
 
 ## Outstanding engineering work
 
-1. Semantic RAG: local embedding model, persistent vector index, hybrid retrieval, chunk metadata and robust citations.
+1. Semantic RAG validation: test the new ONNX embedding path against known MiniLM-compatible exports, improve tokenizer/model coverage, add retrieval quality benchmarks and strengthen source citations.
 2. Full vision-language support: compatible local VLM runtime/model path, image-question prompt integration, image resizing/token budgeting and device-memory safeguards.
 3. Offline voice independence: managed ASR/TTS model assets and explicit offline-engine availability checks instead of relying solely on system speech services.
 4. Model ecosystem: signed catalog, provenance, runtime compatibility metadata, model license display, safe updates and rollback.

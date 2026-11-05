@@ -111,7 +111,7 @@ private fun BufferedReader.readBounded(maxChars: Int): String {
     return out.toString()
 }
 
-data class KnowledgeChunk(val source: String, val index: Int, val text: String)
+data class KnowledgeChunk(val source: String, val index: Int, val text: String, val pageNumber: Int? = null)
 data class RetrievedChunk(val chunk: KnowledgeChunk, val score: Double)
 
 /** Small, deterministic, on-device retrieval index. No embeddings or network calls are implied. */

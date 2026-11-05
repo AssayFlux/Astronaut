@@ -53,6 +53,15 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+private val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS knowledge_chunks (id TEXT NOT NULL, source TEXT NOT NULL, chunkIndex INTEGER NOT NULL, pageNumber INTEGER, text TEXT NOT NULL, embeddingModelId TEXT NOT NULL, scopeId TEXT NOT NULL, embedding BLOB NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY(id))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_knowledge_chunks_source ON knowledge_chunks(source)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_knowledge_chunks_embeddingModelId ON knowledge_chunks(embeddingModelId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_knowledge_chunks_scopeId ON knowledge_chunks(scopeId)")
+    }
+}
+
 object DatabaseProvider {
     private const val LEGACY_NAME = "astronaut-local.db"
     private const val ENCRYPTED_NAME = "astronaut-secure.db"
@@ -96,7 +105,7 @@ object DatabaseProvider {
             ENCRYPTED_NAME
         )
             .openHelperFactory(SupportOpenHelperFactory(passphrase.copyOf()))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .build()
 
@@ -120,7 +129,7 @@ object DatabaseProvider {
             AppDatabase::class.java,
             LEGACY_NAME
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .build()
 
@@ -137,7 +146,7 @@ object DatabaseProvider {
         try {
             val source = legacy.openHelper.writableDatabase
             val target = encryptedTemp.openHelper.writableDatabase
-            val tables = listOf("conversations", "messages", "local_models", "workspace_projects")
+            val tables = listOf("conversations", "messages", "local_models", "workspace_projects", "knowledge_chunks")
             target.beginTransaction()
             try {
                 tables.forEach { table -> copyTable(source, target, table) }

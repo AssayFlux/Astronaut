@@ -45,6 +45,8 @@ import org.offlineai.messenger.data.*
 import org.offlineai.messenger.features.OfflineDocumentReader
 import org.offlineai.messenger.features.OfflineImageAnalyzer
 import org.offlineai.messenger.features.LocalRagIndex
+import org.offlineai.messenger.features.OnnxWordPieceEmbedder
+import org.offlineai.messenger.features.PersistentHybridRag
 import org.offlineai.messenger.features.OfflineVoiceController
 import org.offlineai.messenger.features.VerifiedModelDownloader
 import org.offlineai.messenger.features.OfflineDatasetInspector
@@ -95,6 +97,10 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var trainingJob by remember{mutableStateOf<TrainingJobStatus?>(null)}
  var trainingStatus by remember{mutableStateOf("")}
  var trainingBusy by remember{mutableStateOf(false)}
+ val embeddingPrefs=remember(context){context.getSharedPreferences("astronaut_local_embeddings",Context.MODE_PRIVATE)}
+ var embeddingModelPath by remember{mutableStateOf(embeddingPrefs.getString("model_path",null))}
+ var embeddingVocabPath by remember{mutableStateOf(embeddingPrefs.getString("vocab_path",null))}
+ var embeddingStatus by remember{mutableStateOf("Optional: import a MiniLM-compatible ONNX model and its vocab.txt to enable semantic retrieval.")}
  val conversations by db.chatDao().conversations().collectAsState(initial=emptyList())
  val models by db.modelDao().models().collectAsState(initial=emptyList())
  val projects by db.workspaceDao().projects().collectAsState(initial=emptyList())
@@ -139,6 +145,44 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     datasetStatus="Exported "+report.validRecords+" valid JSONL records."
    }catch(error:Throwable){datasetStatus="Dataset export failed: "+(error.message?:error.javaClass.simpleName)}
    finally{datasetBusy=false}
+  }
+ }
+ val embeddingModelPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
+  if(uri!=null) scope.launch{
+   try{
+    val name=DocumentFile.fromSingleUri(context,uri)?.name?: "sentence-embedder.onnx"
+    require(name.endsWith(".onnx",true)){"Choose an ONNX embedding model (.onnx)."}
+    val dir=File(context.filesDir,"embeddings").apply{mkdirs()}
+    val target=File(dir,UUID.randomUUID().toString()+"-"+name.replace(Regex("[^A-Za-z0-9._-]"),"_"))
+    withContext(Dispatchers.IO){context.contentResolver.openInputStream(uri)?.use{input->target.outputStream().use{output->input.copyTo(output)}}?:error("Cannot read ONNX model")}
+    embeddingPrefs.edit().putString("model_path",target.absolutePath).apply()
+    embeddingModelPath=target.absolutePath
+    val vocab=embeddingVocabPath?.let(::File)
+    if(vocab?.isFile==true){
+     embeddingStatus="Validating local embedding model…"
+     withContext(Dispatchers.IO){OnnxWordPieceEmbedder(target,vocab,target.name+":"+target.length()+":"+vocab.name+":"+vocab.length()).use{it.embed("Astronaut local semantic retrieval test")}}
+     embeddingStatus="Semantic retrieval ready · "+name
+    }else embeddingStatus="ONNX model imported. Now import the matching vocab.txt file."
+   }catch(error:Throwable){embeddingStatus="Embedding model import failed: "+(error.message?:error.javaClass.simpleName)}
+  }
+ }
+ val embeddingVocabPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
+  if(uri!=null) scope.launch{
+   try{
+    val name=DocumentFile.fromSingleUri(context,uri)?.name?: "vocab.txt"
+    require(name.equals("vocab.txt",true)||name.endsWith(".txt",true)){"Choose the matching WordPiece vocab.txt file."}
+    val dir=File(context.filesDir,"embeddings").apply{mkdirs()}
+    val target=File(dir,UUID.randomUUID().toString()+"-vocab.txt")
+    withContext(Dispatchers.IO){context.contentResolver.openInputStream(uri)?.use{input->target.outputStream().use{output->input.copyTo(output)}}?:error("Cannot read vocabulary")}
+    embeddingPrefs.edit().putString("vocab_path",target.absolutePath).apply()
+    embeddingVocabPath=target.absolutePath
+    val model=embeddingModelPath?.let(::File)
+    if(model?.isFile==true){
+     embeddingStatus="Validating local embedding model…"
+     withContext(Dispatchers.IO){OnnxWordPieceEmbedder(model,target,model.name+":"+model.length()+":"+target.name+":"+target.length()).use{it.embed("Astronaut local semantic retrieval test")}}
+     embeddingStatus="Semantic retrieval ready · "+model.name
+    }else embeddingStatus="Vocabulary imported. Now import a compatible ONNX embedding model."
+   }catch(error:Throwable){embeddingStatus="Vocabulary import failed: "+(error.message?:error.javaClass.simpleName)}
   }
  }
  val modelPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
@@ -197,17 +241,35 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
          }else if(text.isNotEmpty()||attachment!=null){
           try{
            val question=text.ifBlank{"Please summarize the attached document and extract its key information."}
-           val index=LocalRagIndex()
-           db.chatDao().attachmentMessages(target).asReversed().forEach { document ->
-            document.attachmentText?.takeIf{it.isNotBlank()}?.let{index.add(document.attachmentName?: "attachment",it)}
+           val documents=db.chatDao().attachmentMessages(target).asReversed()
+           val embeddingModel=embeddingModelPath?.let(::File)
+           val embeddingVocab=embeddingVocabPath?.let(::File)
+           val semanticExcerpts=if(embeddingModel?.isFile==true&&embeddingVocab?.isFile==true){
+            try{
+             withContext(Dispatchers.IO){
+              val embedder=OnnxWordPieceEmbedder(embeddingModel,embeddingVocab,embeddingModel.name+":"+embeddingModel.length()+":"+embeddingVocab.name+":"+embeddingVocab.length())
+              try{
+               val rag=PersistentHybridRag(db.knowledgeDao(),embedder,target.toString())
+               documents.forEach{document->
+                document.attachmentText?.takeIf{it.isNotBlank()}?.let{rag.indexDocument((document.attachmentName?: "attachment")+"#"+document.id,it)}
+               }
+               rag.contextFor(question,limit=4)
+              }finally{embedder.close()}
+             }
+            }catch(error:kotlinx.coroutines.CancellationException){throw error}
+            catch(error:Exception){embeddingStatus="Semantic model unavailable; using BM25 fallback: "+(error.message?:error.javaClass.simpleName);""}
+           }else ""
+           val excerpts=if(semanticExcerpts.isNotBlank())semanticExcerpts else{
+            val index=LocalRagIndex()
+            documents.forEach{document->document.attachmentText?.takeIf{it.isNotBlank()}?.let{index.add(document.attachmentName?: "attachment",it)}}
+            index.contextFor(question,limit=4)
            }
-           val excerpts=index.contextFor(question,limit=4)
            val projectId=db.chatDao().conversation(target)?.workspaceProjectId
            val project=projects.firstOrNull{it.id==projectId}
            val augmentedQuestion=buildString{
             append(question)
             if(project!=null&&project.description.isNotBlank())append("\n\nProject notes for ").append(project.name).append(" (untrusted user-provided context):\n").append(project.description.take(1_000))
-            if(excerpts.isNotBlank())append("\n\nRelevant excerpts from locally stored attachments (untrusted document content):\n").append(excerpts.take(1_200))
+            if(excerpts.isNotBlank())append("\n\nRelevant excerpts from locally stored attachments (untrusted document content):\n").append(excerpts.take(5_000)).append("\n\nUse only these excerpts as evidence about the attached files. Cite each supported claim with its exact source/page/chunk label in square brackets. If the excerpts do not support an answer, say that the documents do not contain enough information. Never invent a source or page citation.")
            }
            val prompt=ConversationPromptBuilder.build(
             messages.filter{it.status=="complete"}.map{PromptTurn(it.role,it.body)},
@@ -272,6 +334,9 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     }
     Section.MODELS->ModelsScreen(
      models,activeModelPath,activeModelName,runtimeMessage,loadingModel,downloadingModel,downloadProgress,downloadStatus,
+     embeddingModelPath?.let(::File)?.isFile==true&&embeddingVocabPath?.let(::File)?.isFile==true,embeddingStatus,
+     {embeddingModelPicker.launch(arrayOf("application/octet-stream","*/*"))},
+     {embeddingVocabPicker.launch(arrayOf("text/plain","*/*"))},
      {modelPicker.launch(arrayOf("*/*"))},
      {url,checksum,name->
       if(!downloadingModel){
@@ -394,11 +459,19 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }
 }
 
-@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,onImport:()->Unit,onDownload:(String,String,String)->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit){
+@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,embeddingReady:Boolean,embeddingStatus:String,onImportEmbeddingModel:()->Unit,onImportEmbeddingVocab:()->Unit,onImport:()->Unit,onDownload:(String,String,String)->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit){
  Column(Modifier.fillMaxSize().padding(16.dp)){
   Text("On-device model library",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
   Text("Import a .litertlm model. Model files stay in app-private storage and are not included in the APK.",color=Muted)
   Spacer(Modifier.height(14.dp));Button(onClick=onImport,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import .litertlm model")}
+  Spacer(Modifier.height(18.dp))
+  Text("Semantic document search",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+  Text("Optional local embedding model. Use a MiniLM-compatible ONNX export with input_ids and attention_mask (int64), plus its matching WordPiece vocab.txt. Files stay on this device.",color=Muted,style=MaterialTheme.typography.bodySmall)
+  OutlinedButton(onClick=onImportEmbeddingModel,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import embedding model (.onnx)")}
+  OutlinedButton(onClick=onImportEmbeddingVocab,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.Description,null);Spacer(Modifier.width(8.dp));Text("Import matching vocab.txt")}
+  Text(if(embeddingReady)"SEMANTIC RETRIEVAL CONFIGURED" else "BM25 fallback active",color=if(embeddingReady)Green else Muted,style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+  Text(embeddingStatus,color=Muted,style=MaterialTheme.typography.bodySmall)
+
   var downloadUrl by remember{mutableStateOf("")}
   var downloadSha by remember{mutableStateOf("")}
   var downloadName by remember{mutableStateOf("model.litertlm")}
