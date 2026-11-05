@@ -45,6 +45,8 @@ import org.offlineai.messenger.data.*
 import org.offlineai.messenger.features.OfflineDocumentReader
 import org.offlineai.messenger.features.OfflineImageAnalyzer
 import org.offlineai.messenger.features.LocalRagIndex
+import org.offlineai.messenger.features.OnnxWordPieceEmbedder
+import org.offlineai.messenger.features.PersistentHybridRag
 import org.offlineai.messenger.features.OfflineVoiceController
 import org.offlineai.messenger.features.VerifiedModelDownloader
 import org.offlineai.messenger.features.OfflineDatasetInspector
@@ -95,6 +97,10 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var trainingJob by remember{mutableStateOf<TrainingJobStatus?>(null)}
  var trainingStatus by remember{mutableStateOf("")}
  var trainingBusy by remember{mutableStateOf(false)}
+ val embeddingPrefs=remember(context){context.getSharedPreferences("astronaut_local_embeddings",Context.MODE_PRIVATE)}
+ var embeddingModelPath by remember{mutableStateOf(embeddingPrefs.getString("model_path",null))}
+ var embeddingVocabPath by remember{mutableStateOf(embeddingPrefs.getString("vocab_path",null))}
+ var embeddingStatus by remember{mutableStateOf("Optional: import a MiniLM-compatible ONNX model and its vocab.txt to enable semantic retrieval.")}
  val conversations by db.chatDao().conversations().collectAsState(initial=emptyList())
  val models by db.modelDao().models().collectAsState(initial=emptyList())
  val projects by db.workspaceDao().projects().collectAsState(initial=emptyList())
@@ -139,6 +145,44 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     datasetStatus="Exported "+report.validRecords+" valid JSONL records."
    }catch(error:Throwable){datasetStatus="Dataset export failed: "+(error.message?:error.javaClass.simpleName)}
    finally{datasetBusy=false}
+  }
+ }
+ val embeddingModelPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
+  if(uri!=null) scope.launch{
+   try{
+    val name=DocumentFile.fromSingleUri(context,uri)?.name?: "sentence-embedder.onnx"
+    require(name.endsWith(".onnx",true)){"Choose an ONNX embedding model (.onnx)."}
+    val dir=File(context.filesDir,"embeddings").apply{mkdirs()}
+    val target=File(dir,UUID.randomUUID().toString()+"-"+name.replace(Regex("[^A-Za-z0-9._-]"),"_"))
+    withContext(Dispatchers.IO){context.contentResolver.openInputStream(uri)?.use{input->target.outputStream().use{output->input.copyTo(output)}}?:error("Cannot read ONNX model")}
+    embeddingPrefs.edit().putString("model_path",target.absolutePath).apply()
+    embeddingModelPath=target.absolutePath
+    val vocab=embeddingVocabPath?.let(::File)
+    if(vocab?.isFile==true){
+     embeddingStatus="Validating local embedding model…"
+     withContext(Dispatchers.IO){OnnxWordPieceEmbedder(target,vocab,target.name+":"+target.length()).use{it.embed("Astronaut local semantic retrieval test")}}
+     embeddingStatus="Semantic retrieval ready · "+name
+    }else embeddingStatus="ONNX model imported. Now import the matching vocab.txt file."
+   }catch(error:Throwable){embeddingStatus="Embedding model import failed: "+(error.message?:error.javaClass.simpleName)}
+  }
+ }
+ val embeddingVocabPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
+  if(uri!=null) scope.launch{
+   try{
+    val name=DocumentFile.fromSingleUri(context,uri)?.name?: "vocab.txt"
+    require(name.equals("vocab.txt",true)||name.endsWith(".txt",true)){"Choose the matching WordPiece vocab.txt file."}
+    val dir=File(context.filesDir,"embeddings").apply{mkdirs()}
+    val target=File(dir,UUID.randomUUID().toString()+"-vocab.txt")
+    withContext(Dispatchers.IO){context.contentResolver.openInputStream(uri)?.use{input->target.outputStream().use{output->input.copyTo(output)}}?:error("Cannot read vocabulary")}
+    embeddingPrefs.edit().putString("vocab_path",target.absolutePath).apply()
+    embeddingVocabPath=target.absolutePath
+    val model=embeddingModelPath?.let(::File)
+    if(model?.isFile==true){
+     embeddingStatus="Validating local embedding model…"
+     withContext(Dispatchers.IO){OnnxWordPieceEmbedder(model,target,model.name+":"+model.length()).use{it.embed("Astronaut local semantic retrieval test")}}
+     embeddingStatus="Semantic retrieval ready · "+model.name
+    }else embeddingStatus="Vocabulary imported. Now import a compatible ONNX embedding model."
+   }catch(error:Throwable){embeddingStatus="Vocabulary import failed: "+(error.message?:error.javaClass.simpleName)}
   }
  }
  val modelPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
@@ -197,11 +241,25 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
          }else if(text.isNotEmpty()||attachment!=null){
           try{
            val question=text.ifBlank{"Please summarize the attached document and extract its key information."}
-           val index=LocalRagIndex()
-           db.chatDao().attachmentMessages(target).asReversed().forEach { document ->
-            document.attachmentText?.takeIf{it.isNotBlank()}?.let{index.add(document.attachmentName?: "attachment",it)}
+           val documents=db.chatDao().attachmentMessages(target).asReversed()
+           val embeddingModel=embeddingModelPath?.let(::File)
+           val embeddingVocab=embeddingVocabPath?.let(::File)
+           val excerpts=if(embeddingModel?.isFile==true&&embeddingVocab?.isFile==true){
+            withContext(Dispatchers.IO){
+             val embedder=OnnxWordPieceEmbedder(embeddingModel,embeddingVocab,embeddingModel.name+":"+embeddingModel.length())
+             try{
+              val rag=PersistentHybridRag(db.knowledgeDao(),embedder,target.toString())
+              documents.forEach{document->
+               document.attachmentText?.takeIf{it.isNotBlank()}?.let{rag.indexDocument((document.attachmentName?: "attachment")+"#"+document.id,it)}
+              }
+              rag.contextFor(question,limit=4)
+             }finally{embedder.close()}
+            }
+           }else{
+            val index=LocalRagIndex()
+            documents.forEach{document->document.attachmentText?.takeIf{it.isNotBlank()}?.let{index.add(document.attachmentName?: "attachment",it)}}
+            index.contextFor(question,limit=4)
            }
-           val excerpts=index.contextFor(question,limit=4)
            val projectId=db.chatDao().conversation(target)?.workspaceProjectId
            val project=projects.firstOrNull{it.id==projectId}
            val augmentedQuestion=buildString{
@@ -272,6 +330,9 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     }
     Section.MODELS->ModelsScreen(
      models,activeModelPath,activeModelName,runtimeMessage,loadingModel,downloadingModel,downloadProgress,downloadStatus,
+     embeddingModelPath!=null&&embeddingVocabPath!=null,embeddingStatus,
+     {embeddingModelPicker.launch(arrayOf("application/octet-stream","*/*"))},
+     {embeddingVocabPicker.launch(arrayOf("text/plain","*/*"))},
      {modelPicker.launch(arrayOf("*/*"))},
      {url,checksum,name->
       if(!downloadingModel){
