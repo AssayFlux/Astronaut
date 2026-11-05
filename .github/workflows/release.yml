@@ -27,6 +27,16 @@ jobs:
           packages: "platform-tools"
       - name: Install Android SDK packages
         run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+      - name: Verify release tag matches Android app version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            APP_VERSION="$(awk '/versionName[[:space:]]*=/ { line=$0; sub(/^.*="/, "", line); sub(/".*$/, "", line); print line; exit }' app/build.gradle.kts)"
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [ -z "$APP_VERSION" ] || [ "$TAG_VERSION" != "$APP_VERSION" ]; then
+              echo "::error::Release tag v$TAG_VERSION does not match app versionName $APP_VERSION"
+              exit 1
+            fi
+          fi
       - name: Validate release signing secrets
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

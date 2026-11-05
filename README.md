@@ -1,6 +1,7 @@
 # Astronaut — Offline AI Messenger
 
 **Android application ID:** `org.astronaut.agi`  
+**App version:** `0.1.0` (release tag: `v0.1.0`; Android versionCode: `7`)  
 **Stack:** Kotlin, Jetpack Compose, Room + SQLCipher, LiteRT-LM, ML Kit  
 **Minimum Android:** API 26 (Android 8.0)  
 **Compile SDK:** 36 · **JDK:** 17 · **Gradle:** 8.13
