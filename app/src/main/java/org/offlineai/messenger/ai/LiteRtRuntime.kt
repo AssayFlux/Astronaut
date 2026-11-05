@@ -12,19 +12,24 @@ import java.io.Closeable
 import java.io.File
 import java.util.concurrent.Executors
 
-/** One LiteRT-LM engine, owned on a dedicated thread. Inference is fully on-device. */
+/**
+ * One LiteRT-LM engine on a dedicated thread.
+ *
+ * A fresh Conversation is created for every request. Conversation history is supplied
+ * explicitly by the caller from the selected chat's persisted messages. This prevents
+ * hidden in-memory state leaking when the user switches chats or restarts the process.
+ */
 class LiteRtRuntime(context: Context) : Closeable {
     private val cacheDir = File(context.cacheDir, "litert-cache").apply { mkdirs() }
     private val dispatcher = Executors.newSingleThreadExecutor { task ->
         Thread(task, "astronaut-litert").apply { isDaemon = true }
     }.asCoroutineDispatcher()
     private var engine: Engine? = null
-    private var conversation: Conversation? = null
     private var closed = false
 
     suspend fun load(modelPath: String) = withContext(dispatcher) {
-        check(!closed)
-        closeOnWorker()
+        check(!closed) { "Runtime is closed" }
+        closeEngineOnWorker()
         val file = File(modelPath)
         require(file.isFile && file.canRead()) { "Model file is missing or unreadable" }
         val candidate = Engine(EngineConfig(
@@ -32,30 +37,32 @@ class LiteRtRuntime(context: Context) : Closeable {
             backend = Backend.CPU(),
             cacheDir = cacheDir.absolutePath
         ))
-        candidate.initialize()
         try {
-            val session = candidate.createConversation()
+            candidate.initialize()
             engine = candidate
-            conversation = session
         } catch (error: Throwable) {
-            candidate.close()
+            runCatching { candidate.close() }
             throw error
         }
     }
 
     suspend fun generate(prompt: String): String = withContext(dispatcher) {
-        check(!closed)
-        val session = conversation ?: error("Load a model before chatting")
-        buildString {
-            session.sendMessageAsync(prompt).collect { chunk -> append(chunk.toString()) }
-        }.trim()
+        check(!closed) { "Runtime is closed" }
+        require(prompt.isNotBlank()) { "Prompt cannot be empty" }
+        val activeEngine = engine ?: error("Load a model before chatting")
+        val session: Conversation = activeEngine.createConversation()
+        try {
+            buildString {
+                session.sendMessageAsync(prompt).collect { chunk -> append(chunk.toString()) }
+            }.trim()
+        } finally {
+            runCatching { session.close() }
+        }
     }
 
-    suspend fun unload() = withContext(dispatcher) { closeOnWorker() }
+    suspend fun unload() = withContext(dispatcher) { closeEngineOnWorker() }
 
-    private fun closeOnWorker() {
-        conversation?.let { runCatching { it.close() } }
-        conversation = null
+    private fun closeEngineOnWorker() {
         engine?.let { runCatching { it.close() } }
         engine = null
     }
@@ -64,7 +71,7 @@ class LiteRtRuntime(context: Context) : Closeable {
         if (closed) return
         closed = true
         try {
-            kotlinx.coroutines.runBlocking(dispatcher) { closeOnWorker() }
+            kotlinx.coroutines.runBlocking(dispatcher) { closeEngineOnWorker() }
         } finally {
             dispatcher.close()
         }
