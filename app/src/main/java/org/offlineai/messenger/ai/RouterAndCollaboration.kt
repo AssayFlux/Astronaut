@@ -58,7 +58,16 @@ class CollaborationEngine(
         for (model in candidates) {
             val provider = providers.firstOrNull { it.providerId == model.runtimeId }
                 ?: return CollaborationResult.Unavailable("Required model runtime is not registered.")
-            if (!provider.isAvailable(model)) {
+            val available = try {
+                provider.isAvailable(model)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                return CollaborationResult.Unavailable(
+                    "Could not check model " + model.name + ": " + (error.message ?: error.javaClass.simpleName)
+                )
+            }
+            if (!available) {
                 return CollaborationResult.Unavailable("A selected model is unavailable.")
             }
             try {
@@ -79,6 +88,18 @@ class CollaborationEngine(
         val coordinatorModel = catalog.all().firstOrNull {
             it.installed && it.runtimeId == coordinator.providerId && Capability.CHAT in it.capabilities
         } ?: return CollaborationResult.Unavailable("No installed coordinator model is available.")
+        val coordinatorAvailable = try {
+            coordinator.isAvailable(coordinatorModel)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            return CollaborationResult.Unavailable(
+                "Could not check coordinator " + coordinatorModel.name + ": " + (error.message ?: error.javaClass.simpleName)
+            )
+        }
+        if (!coordinatorAvailable) {
+            return CollaborationResult.Unavailable("The coordinator model is unavailable.")
+        }
         val joined = outputs.joinToString("\n\n") { "[" + it.modelId + "]\n" + it.text }
         return try {
             onProgress("Coordinator synthesis: " + coordinatorModel.name)
