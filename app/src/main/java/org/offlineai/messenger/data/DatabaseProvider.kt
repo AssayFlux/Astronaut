@@ -53,6 +53,14 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+private val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS knowledge_chunks (id TEXT NOT NULL, source TEXT NOT NULL, chunkIndex INTEGER NOT NULL, text TEXT NOT NULL, embeddingModelId TEXT NOT NULL, embedding BLOB NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY(id))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_knowledge_chunks_source ON knowledge_chunks(source)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_knowledge_chunks_embeddingModelId ON knowledge_chunks(embeddingModelId)")
+    }
+}
+
 object DatabaseProvider {
     private const val LEGACY_NAME = "astronaut-local.db"
     private const val ENCRYPTED_NAME = "astronaut-secure.db"
@@ -96,7 +104,7 @@ object DatabaseProvider {
             ENCRYPTED_NAME
         )
             .openHelperFactory(SupportOpenHelperFactory(passphrase.copyOf()))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .build()
 
