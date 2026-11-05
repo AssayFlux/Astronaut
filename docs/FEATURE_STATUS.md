@@ -45,8 +45,8 @@ This file distinguishes implemented code from behavior that still requires hardw
 1. Validate the new ONNX semantic RAG path with a known MiniLM-compatible model on physical devices; add more tokenizer/model export variants and quality benchmarks.
 2. Validate the LiteRT-LM vision path with supported multimodal model artifacts; benchmark image Q&A for charts, diagrams, screenshots and photographs on target devices.
 3. Validate platform-managed offline ASR language packs and TTS voice selection on target devices; consider bundled independent ASR/TTS runtimes only if device coverage requires them.
-4. Signed model catalog with compatibility metadata, provenance and automatic update policy.
-5. Adapter conversion/export into a runtime-compatible LiteRT-LM artifact.
+4. Provision publisher signing keys and connect the signed catalog, compatibility/install/rollback services to the Compose model library; add resumable downloads and automatic update policy.
+5. Integrate and validate a supported PEFT-to-LiteRT-LM converter, then run real model compatibility and inference tests.
 6. Full Developer Studio: constrained project file browser/editor, Git operations, build/test orchestration and explicit user approval for writes/commands.
 7. More robust app instrumentation tests, migration tests, model compatibility tests and device performance tests.
 
