@@ -690,7 +690,7 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
   Text("Offline voice",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
   Text("Speech recognition uses Android's on-device recognizer only. Text-to-speech is restricted to installed voices that do not require a network connection.",color=Muted,style=MaterialTheme.typography.bodySmall)
   OutlinedTextField(languageDraft,{languageDraft=it},modifier=Modifier.fillMaxWidth(),label={Text("Speech language (BCP-47)")},placeholder={Text("en-US, hi-IN, bn-IN")},singleLine=true)
-  Button(onClick={ {onLanguageChange(languageDraft)} },modifier=Modifier.fillMaxWidth()){Text("Apply speech language")}
+  Button(onClick={onLanguageChange(languageDraft)},modifier=Modifier.fillMaxWidth()){Text("Apply speech language")}
   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
    OutlinedButton(onClick=onCheckLanguages,modifier=Modifier.weight(1f)){Text("Check packs")}
    Button(onClick=onDownloadLanguage,modifier=Modifier.weight(1f),enabled=recognition.downloadable.isNotEmpty()||recognition.pending.isNotEmpty()){Text("Download pack")}
