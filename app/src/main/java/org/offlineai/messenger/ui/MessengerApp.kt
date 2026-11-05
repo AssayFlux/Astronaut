@@ -308,7 +308,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }
  MaterialTheme(colorScheme=if(darkAppearance) darkColorScheme(primary=selectedAccent,onPrimary=Color.White,background=Color(0xFF101318),surface=Color(0xFF1A1F27),onSurface=Color(0xFFE9EDF3),secondary=selectedAccent) else lightColorScheme(primary=selectedAccent,onPrimary=Color.White,background=Color(0xFFF6F7F9),surface=Color.White,onSurface=Color(0xFF20242B),secondary=selectedAccent)){
   Scaffold(containerColor=MaterialTheme.colorScheme.background,topBar={TopAppBar(title={Column{
-   Text("ASTRONAUT",style=MaterialTheme.typography.labelMedium,color=Green,fontWeight=FontWeight.Bold)
+   Text("ASTRONAUT",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold)
    Text(section.label,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
   }},actions={if(section==Section.CHATS) IconButton(onClick={scope.launch{selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))}}){Icon(Icons.Default.Add,"New chat")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=MaterialTheme.colorScheme.background))},
    bottomBar={NavigationBar(containerColor=MaterialTheme.colorScheme.surface, tonalElevation=6.dp){
@@ -700,7 +700,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    Switch(checked=enabled,onCheckedChange=onToggle,enabled=hasKey&&baseUrl.startsWith("https://")&&modelId.isNotBlank()||enabled)
   }
   if(hasKey)TextButton(onClick=onClearKey){Text("Remove saved API key and disable online mode")}
-  Text(status,color=if(status.contains("failed",true)||status.contains("could not",true))Color(0xFFB45335) else Green,style=MaterialTheme.typography.bodySmall)
+  Text(status,color=if(status.contains("failed",true)||status.contains("could not",true))Color(0xFFB45335) else MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
  }
 }
 
@@ -727,7 +727,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   }
   if(pendingDelete!=null) AlertDialog(onDismissRequest={pendingDelete=null},title={Text("Delete conversation?")},text={Text("This permanently deletes this chat and its messages from this device.")},confirmButton={TextButton(onClick={pendingDelete?.let(onDelete);pendingDelete=null}){Text("Delete")}},dismissButton={TextButton(onClick={pendingDelete=null}){Text("Cancel")}})
   if(messages.isEmpty()) Column(Modifier.weight(1f).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center){
-   Box(Modifier.size(68.dp).background(Color(0xFFDCEBE3),CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.AutoAwesome,null,tint=Green,modifier=Modifier.size(32.dp))}
+   Box(Modifier.size(68.dp).background(Color(0xFFDCEBE3),CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.AutoAwesome,null,tint=MaterialTheme.colorScheme.primary,modifier=Modifier.size(32.dp))}
    Spacer(Modifier.height(18.dp));Text("A quieter kind of AI.",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
    Text("Private conversations. On-device intelligence.",color=Muted)
    Text(runtimeMessage,style=MaterialTheme.typography.bodySmall,color=Muted)
@@ -737,8 +737,8 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      Surface(color=if(mine)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,shape=RoundedCornerShape(if(mine)22.dp else 16.dp),modifier=Modifier.widthIn(max=340.dp)){
       Column(Modifier.padding(14.dp)){
        if(message.body.isNotBlank()) Text(message.body,color=MaterialTheme.colorScheme.onSurface)
-       if(!mine&&message.body.isNotBlank()) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End){IconButton(onClick={onSpeak(message.body)}){Icon(Icons.Default.VolumeUp,"Read response aloud",tint=Green)}}
-       if(message.attachmentName!=null){Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.AttachFile,null,tint=Green,modifier=Modifier.size(16.dp));Text(message.attachmentName,color=Green,style=MaterialTheme.typography.labelMedium)}}
+       if(!mine&&message.body.isNotBlank()) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End){IconButton(onClick={onSpeak(message.body)}){Icon(Icons.Default.VolumeUp,"Read response aloud",tint=MaterialTheme.colorScheme.primary)}}
+       if(message.attachmentName!=null){Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.AttachFile,null,tint=MaterialTheme.colorScheme.primary,modifier=Modifier.size(16.dp));Text(message.attachmentName,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelMedium)}}
        Text(if(mine)"You" else "Astronaut",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.primary)
       }
      }
@@ -746,7 +746,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    }
   }
   if(attachmentName!=null) Row(verticalAlignment=Alignment.CenterVertically,modifier=Modifier.fillMaxWidth().padding(bottom=6.dp)){
-   Icon(Icons.Default.AttachFile,null,tint=Green);Text(attachmentName,Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis)
+   Icon(Icons.Default.AttachFile,null,tint=MaterialTheme.colorScheme.primary);Text(attachmentName,Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis)
    IconButton(onClick=onClearAttachment){Icon(Icons.Default.Close,"Remove attachment")}
   }
   Surface(color=MaterialTheme.colorScheme.surface,shape=RoundedCornerShape(26.dp),shadowElevation=3.dp){
@@ -754,7 +754,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     IconButton(onClick=onAttach){Icon(Icons.Default.AttachFile,"Attach file",tint=Muted)}
     IconButton(onClick=onVoice,enabled=!sending){Icon(if(voiceListening)Icons.Default.MicOff else Icons.Default.Mic,if(voiceListening)"Listening" else "Speak message",tint=if(voiceListening)Green else Muted)}
     TextField(draft,onDraftChange,Modifier.weight(1f),placeholder={Text("Message privately…")},maxLines=5,enabled=!sending,colors=TextFieldDefaults.colors(focusedContainerColor=Color.Transparent,unfocusedContainerColor=Color.Transparent,focusedIndicatorColor=Color.Transparent,unfocusedIndicatorColor=Color.Transparent))
-    IconButton(onClick=onSend,enabled=!sending&&(draft.isNotBlank()||attachmentName!=null)){if(sending)CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)else Icon(Icons.Default.Send,"Send",tint=Green)}
+    IconButton(onClick=onSend,enabled=!sending&&(draft.isNotBlank()||attachmentName!=null)){if(sending)CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)else Icon(Icons.Default.Send,"Send",tint=MaterialTheme.colorScheme.primary)}
    }
   }
   Text((if(onlineEnabled)"Online · remote provider" else "On-device · "+(activeModelName?: "No model loaded")),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.primary,modifier=Modifier.padding(top=6.dp,bottom=8.dp))
@@ -778,7 +778,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   Text("Optional local embedding model. Use a MiniLM-compatible ONNX export with input_ids and attention_mask (int64), plus its matching WordPiece vocab.txt. Files stay on this device.",color=Muted,style=MaterialTheme.typography.bodySmall)
   OutlinedButton(onClick=onImportEmbeddingModel,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import embedding model (.onnx)")}
   OutlinedButton(onClick=onImportEmbeddingVocab,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.Description,null);Spacer(Modifier.width(8.dp));Text("Import matching vocab.txt")}
-  Text(if(embeddingReady)"SEMANTIC RETRIEVAL CONFIGURED" else "BM25 fallback active",color=if(embeddingReady)Green else Muted,style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+  Text(if(embeddingReady)"SEMANTIC RETRIEVAL CONFIGURED" else "BM25 fallback active",color=if(embeddingReady)MaterialTheme.colorScheme.primary else Muted,style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
   Text(embeddingStatus,color=Muted,style=MaterialTheme.typography.bodySmall)
 
   var downloadUrl by remember{mutableStateOf("")}
@@ -795,8 +795,8 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   if(downloading)OutlinedButton(onClick=onCancelDownload,modifier=Modifier.fillMaxWidth()){
    Icon(Icons.Default.Close,null);Spacer(Modifier.width(8.dp));Text("Cancel download")
   }
-  if(downloadStatus.isNotBlank())Text(downloadStatus,color=Green,style=MaterialTheme.typography.bodySmall)
-  Spacer(Modifier.height(10.dp));Text(status,color=Green,style=MaterialTheme.typography.bodySmall)
+  if(downloadStatus.isNotBlank())Text(downloadStatus,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
+  Spacer(Modifier.height(10.dp));Text(status,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
   if(loading)LinearProgressIndicator(Modifier.fillMaxWidth())
   Spacer(Modifier.height(10.dp))
   if(models.isEmpty())EmptyState("No model imported","Choose a compatible LiteRT-LM .litertlm file. A small model is best for phones.")
@@ -810,7 +810,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    else if(!canLoad)Text("Artifact imported. Its declared runtime is not bundled in this build, so loading is disabled rather than sent to an incompatible engine.",color=Muted,style=MaterialTheme.typography.bodySmall)
    Text("Vision input is available only for compatible multimodal .litertlm models. Enable this only when the model publisher confirms image support.",color=Muted,style=MaterialTheme.typography.bodySmall)
    Row(verticalAlignment=Alignment.CenterVertically){
-    if(activePath==model.modelPath)Text("ACTIVE · "+activeName,color=Green,modifier=Modifier.weight(1f),style=MaterialTheme.typography.labelSmall) else Spacer(Modifier.weight(1f))
+    if(activePath==model.modelPath)Text("ACTIVE · "+activeName,color=MaterialTheme.colorScheme.primary,modifier=Modifier.weight(1f),style=MaterialTheme.typography.labelSmall) else Spacer(Modifier.weight(1f))
     TextButton(onClick={model.modelPath?.let(onEnableVision)?:Unit},enabled=model.modelPath!=null){Text(if(model.modelPath==visionModelPath)"Vision enabled" else "Enable vision")}
     TextButton(onClick={onRemove(model)}){Text("Remove")}
     Button(onClick={onLoad(model)},enabled=!loading&&canLoad){Text(if(activePath==model.modelPath)"Reload" else if(canLoad)"Load model" else if(isOnnx)"Embedding artifact" else "Runtime unavailable")}
@@ -830,14 +830,14 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  Column(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
   Text("Independent model review",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
   Text("Astronaut runs two different local models one at a time, then asks a coordinator pass to compare their answers. This reduces peak RAM use; it can take several minutes on a phone.",color=Muted)
-  Text("Available local models: "+available.size,style=MaterialTheme.typography.labelLarge,color=Green)
+  Text("Available local models: "+available.size,style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)
   available.forEach{model->Text("• "+model.displayName,style=MaterialTheme.typography.bodySmall,color=Muted)}
   OutlinedTextField(prompt,onPrompt,modifier=Modifier.fillMaxWidth(),label={Text("Task for both models")},minLines=3,maxLines=6,enabled=!running)
   Button(onClick=onRun,modifier=Modifier.fillMaxWidth(),enabled=!running&&prompt.isNotBlank()&&available.size>=2){
    if(running)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp) else Icon(Icons.Default.Hub,null)
    Spacer(Modifier.width(8.dp));Text(if(running)"Reviewing…" else "Run two-model review")
   }
-  Text(status,color=if(running)Green else Muted,style=MaterialTheme.typography.bodySmall)
+  Text(status,color=if(running)MaterialTheme.colorScheme.primary else Muted,style=MaterialTheme.typography.bodySmall)
   if(available.size<2)EmptyState("Two models required","Import at least two distinct .litertlm model files in Models. No model output is simulated.")
  }
 }
@@ -855,7 +855,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Developer workspace",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Organise local projects and notes.",color=Muted)};Column{FilledTonalButton(onClick=onAdd){Icon(Icons.Default.Add,null);Text("New")};OutlinedButton(onClick={studioOpen=true}){Icon(Icons.Default.Code,null);Text("Studio")}}}
   Spacer(Modifier.height(14.dp));if(projects.isEmpty())EmptyState("A space for your work","Create a project to keep its name and description on this device.")
   LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(projects,key={it.id}){project->Card{Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
-   Icon(Icons.Default.Folder,null,tint=Green,modifier=Modifier.size(28.dp));Spacer(Modifier.width(12.dp))
+   Icon(Icons.Default.Folder,null,tint=MaterialTheme.colorScheme.primary,modifier=Modifier.size(28.dp));Spacer(Modifier.width(12.dp))
    Column(Modifier.weight(1f)){Text(project.name,fontWeight=FontWeight.SemiBold);if(project.description.isNotBlank())Text(project.description,color=Muted,maxLines=2)}
    TextButton(onClick={onOpen(project)}){Text("Open assistant")}
    IconButton(onClick={onDelete(project.id)}){Icon(Icons.Default.DeleteOutline,"Delete project")}
@@ -884,16 +884,16 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    Text(datasetName,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
    Card(Modifier.fillMaxWidth()){
     Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
-     Text("Valid records: "+report.validRecords,style=MaterialTheme.typography.titleMedium,color=Green)
+     Text("Valid records: "+report.validRecords,style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.primary)
      Text("Training split: "+report.trainRecords)
      Text("Validation split: "+report.validationRecords)
-     Text("Invalid lines: "+report.invalidLines.size,color=if(report.invalidLines.isEmpty())Green else Color(0xFF9A4D27))
+     Text("Invalid lines: "+report.invalidLines.size,color=if(report.invalidLines.isEmpty())MaterialTheme.colorScheme.primary else Color(0xFF9A4D27))
      if(report.invalidLines.isNotEmpty())Text("Invalid line numbers: "+report.invalidLines.take(20).joinToString(", "),color=Muted,style=MaterialTheme.typography.bodySmall)
     }
    }
    Button(onClick=onExport,modifier=Modifier.fillMaxWidth(),enabled=!busy&&report.validRecords>0){Icon(Icons.Default.FileDownload,null);Spacer(Modifier.width(8.dp));Text("Export cleaned JSONL")}
   }else EmptyState("No dataset loaded","Choose a JSONL file containing text, prompt, or messages fields.")
-  if(status.isNotBlank())Text(status,color=Green,style=MaterialTheme.typography.bodySmall)
+  if(status.isNotBlank())Text(status,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
   Divider()
   Text("Optional workstation training",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
   Text("Training uploads the cleaned dataset to the HTTPS server you configure below. The API key is held only in this screen's memory and is not saved.",color=Muted,style=MaterialTheme.typography.bodySmall)
@@ -920,9 +920,9 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    LinearProgressIndicator(progress=job.progress/100f,modifier=Modifier.fillMaxWidth())
    Text(job.message+" ("+job.progress.toInt()+"%)",color=Muted,style=MaterialTheme.typography.bodySmall)
    if(job.state=="queued"||job.state=="running")TextButton(onClick={onCancelTraining(serverUrl.trim(),apiKey,job.id)}){Text("Cancel training")}
-   if(job.artifactUrl!=null)Text("Adapter artifact endpoint: "+serverUrl.trimEnd('/')+job.artifactUrl,color=Green,style=MaterialTheme.typography.bodySmall)
+   if(job.artifactUrl!=null)Text("Adapter artifact endpoint: "+serverUrl.trimEnd('/')+job.artifactUrl,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
   }
-  if(jobStatus.isNotBlank())Text(jobStatus,color=Green,style=MaterialTheme.typography.bodySmall)
+  if(jobStatus.isNotBlank())Text(jobStatus,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
   Text("The GPU worker runs on your workstation, not on Android. It returns a PEFT adapter and manifest; conversion to a directly loadable .litertlm model is a separate step.",color=Muted,style=MaterialTheme.typography.bodySmall)
  }
 }
@@ -1011,7 +1011,7 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
    OutlinedButton(onClick=onCheckLanguages,modifier=Modifier.weight(1f)){Text("Check packs")}
    Button(onClick=onDownloadLanguage,modifier=Modifier.weight(1f),enabled=recognition.downloadable.isNotEmpty()){Text("Download pack")}
   }
-  if(recognition.installed.isNotEmpty())Text("Installed for offline speech: "+recognition.installed.joinToString{friendlyLanguageName(it)},color=Green,style=MaterialTheme.typography.bodySmall)
+  if(recognition.installed.isNotEmpty())Text("Installed for offline speech: "+recognition.installed.joinToString{friendlyLanguageName(it)},color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
   if(recognition.downloadable.isNotEmpty())Text("Available to download: "+recognition.downloadable.joinToString{friendlyLanguageName(it)},color=Muted,style=MaterialTheme.typography.bodySmall)
   if(recognition.pending.isNotEmpty())Text("Download pending: "+recognition.pending.joinToString{friendlyLanguageName(it)},color=Muted,style=MaterialTheme.typography.bodySmall)
   Text("Offline TTS voice",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
@@ -1028,7 +1028,7 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
    }
   }
   OutlinedButton(onClick=onTestVoice,modifier=Modifier.fillMaxWidth(),enabled=voices.isNotEmpty()){Icon(Icons.Default.VolumeUp,null);Spacer(Modifier.width(8.dp));Text("Test offline voice")}
-  Text(speechStatus,color=Green,style=MaterialTheme.typography.bodySmall)
+  Text(speechStatus,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodySmall)
   InfoCard("Language pack downloads","On Android 13 and newer, Astronaut can ask the system speech provider to download supported on-device recognition languages. The system provider controls the actual download and availability. Android 12 can use an already-installed on-device recognizer but cannot expose the same pack-management API.")
  }
 }
