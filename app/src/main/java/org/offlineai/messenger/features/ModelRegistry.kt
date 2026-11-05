@@ -64,8 +64,13 @@ class ModelInstallStore(context: Context) {
     private val root = File(context.applicationContext.filesDir, "model-registry").apply { mkdirs() }
 
     @Synchronized
-    fun install(\n        entry: ModelCatalogEntry,\n        verifiedSource: File,\n        ensureActive: () -> Unit = {}\n    ): InstalledModelVersion {
-        ensureActive()\n        require(verifiedSource.isFile && verifiedSource.canRead()) { "Verified model source is missing or unreadable." }
+    fun install(
+        entry: ModelCatalogEntry,
+        verifiedSource: File,
+        ensureActive: () -> Unit = {}
+    ): InstalledModelVersion {
+        ensureActive()
+        require(verifiedSource.isFile && verifiedSource.canRead()) { "Verified model source is missing or unreadable." }
         require(entry.id.matches(Regex("^[a-z0-9][a-z0-9._-]{1,79}$"))) { "Invalid model ID." }
         require(entry.version.matches(Regex("^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"))) { "Invalid model version." }
         require(entry.fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}$")) && entry.fileName.contains('.')) { "Invalid model filename." }
