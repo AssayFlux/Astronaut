@@ -16,6 +16,7 @@ data class KnowledgeChunkEntity(
  @PrimaryKey val id:String,
  val source:String,
  val chunkIndex:Int,
+ val pageNumber:Int?,
  val text:String,
  val embeddingModelId:String,
  val embedding:ByteArray,
