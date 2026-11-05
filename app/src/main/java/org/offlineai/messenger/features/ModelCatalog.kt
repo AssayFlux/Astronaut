@@ -3,9 +3,11 @@ package org.offlineai.messenger.features
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
-import java.security.KeyFactory
-import java.security.Signature
-import java.security.spec.X509EncodedKeySpec
+import net.i2p.crypto.eddsa.EdDSAEngine
+import net.i2p.crypto.eddsa.EdDSAPublicKey
+import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable
+import net.i2p.crypto.eddsa.spec.EdDSAPublicKeySpec
+import java.security.MessageDigest
 import java.util.Base64
 
 enum class ModelCapability { CHAT, CODE, VISION, AUDIO_TRANSCRIPTION, EMBEDDING, IMAGE_GENERATION }
@@ -44,16 +46,26 @@ fun interface CatalogSignatureVerifier {
 }
 
 class Ed25519CatalogVerifier(x509PublicKeyBase64: String) : CatalogSignatureVerifier {
-    private val publicKey = KeyFactory.getInstance("Ed25519").generatePublic(
-        X509EncodedKeySpec(Base64.getDecoder().decode(x509PublicKeyBase64))
-    )
+    private val publicKey: EdDSAPublicKey
 
-    override fun verify(payload: ByteArray, signature: ByteArray): Boolean {
-        val verifier = Signature.getInstance("Ed25519")
+    init {
+        val encoded = Base64.getDecoder().decode(x509PublicKeyBase64)
+        val prefix = byteArrayOf(0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00)
+        require(encoded.size == 44 && encoded.copyOfRange(0, prefix.size).contentEquals(prefix)) {
+            "Catalog publisher key must be an X.509 Ed25519 public key."
+        }
+        val rawKey = encoded.copyOfRange(prefix.size, encoded.size)
+        val curve = EdDSANamedCurveTable.getByName("Ed25519")
+            ?: error("Ed25519 curve implementation is unavailable.")
+        publicKey = EdDSAPublicKey(EdDSAPublicKeySpec(rawKey, curve))
+    }
+
+    override fun verify(payload: ByteArray, signature: ByteArray): Boolean = runCatching {
+        val verifier = EdDSAEngine(MessageDigest.getInstance("SHA-512"))
         verifier.initVerify(publicKey)
         verifier.update(payload)
-        return verifier.verify(signature)
-    }
+        verifier.verify(signature)
+    }.getOrDefault(false)
 }
 
 object ModelCatalogParser {

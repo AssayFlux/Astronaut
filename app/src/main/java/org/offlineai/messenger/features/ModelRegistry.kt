@@ -63,7 +63,7 @@ class ModelInstallStore(context: Context) {
         require(verifiedSource.isFile && verifiedSource.canRead()) { "Verified model source is missing or unreadable." }
         require(entry.id.matches(Regex("^[a-z0-9][a-z0-9._-]{1,79}$"))) { "Invalid model ID." }
         require(entry.version.matches(Regex("^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"))) { "Invalid model version." }
-        require(entry.fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}\\\\.litertlm$", RegexOption.IGNORE_CASE))) { "Invalid model filename." }
+        require(entry.fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}\\.litertlm$", RegexOption.IGNORE_CASE))) { "Invalid model filename." }
         require(entry.sha256.matches(Regex("^[A-Fa-f0-9]{64}$"))) { "Invalid model checksum." }
         require(verifiedSource.length() == entry.sizeBytes) { "Downloaded model size does not match the signed catalog." }
         val modelRoot = File(root, entry.id).apply { mkdirs() }

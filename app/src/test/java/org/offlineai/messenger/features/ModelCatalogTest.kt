@@ -1,9 +1,12 @@
 package org.offlineai.messenger.features
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Base64
+import java.security.KeyPairGenerator
+import java.security.Signature
 
 class ModelCatalogTest {
     private fun modelJson(
@@ -66,5 +69,21 @@ class ModelCatalogTest {
             bytes.contentEquals(raw) && signature.contentEquals(byteArrayOf(1))
         })
         assertEquals(1, accepted.models.size)
+    }
+}
+
+class Ed25519CatalogVerifierTest {
+    @Test
+    fun ed25519VerifierAcceptsAuthenticSignatureAndRejectsTampering() {
+        val pair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        val payload = """{"schema_version":1,"models":[]}""".toByteArray()
+        val signer = Signature.getInstance("Ed25519")
+        signer.initSign(pair.private)
+        signer.update(payload)
+        val signature = signer.sign()
+        val publicKey = Base64.getEncoder().encodeToString(pair.public.encoded)
+        val verifier = Ed25519CatalogVerifier(publicKey)
+        assertTrue(verifier.verify(payload, signature))
+        assertFalse(verifier.verify(payload + byteArrayOf(0), signature))
     }
 }

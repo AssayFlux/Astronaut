@@ -8,6 +8,8 @@ val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH")
 val releaseStorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
 val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
 val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+val modelCatalogUrl = providers.gradleProperty("ASTRONAUT_CATALOG_URL").orElse("").get().replace("\\", "\\\\").replace("\"", "\\\"")
+val modelCatalogPublicKey = providers.gradleProperty("ASTRONAUT_CATALOG_PUBLIC_KEY").orElse("").get().replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
  namespace="org.offlineai.messenger"
@@ -18,6 +20,8 @@ android {
   targetSdk=35
   versionCode=7
   versionName="0.1.0"
+  buildConfigField("String", "MODEL_CATALOG_URL", "\"${modelCatalogUrl}\"")
+  buildConfigField("String", "MODEL_CATALOG_PUBLIC_KEY", "\"${modelCatalogPublicKey}\"")
   testInstrumentationRunner="androidx.test.runner.AndroidJUnitRunner"
  }
  signingConfigs {
@@ -39,7 +43,7 @@ android {
    }
   }
  }
- buildFeatures { compose=true }
+ buildFeatures { compose=true; buildConfig=true }
  compileOptions { sourceCompatibility=JavaVersion.VERSION_17; targetCompatibility=JavaVersion.VERSION_17 }
 }
 kotlin {
@@ -68,6 +72,7 @@ dependencies {
  implementation("io.coil-kt:coil-compose:2.7.0")
  implementation("androidx.media3:media3-exoplayer:1.5.1")
  implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.1")
+ implementation("net.i2p.crypto:eddsa:0.3.0")
  implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
  implementation("com.google.mlkit:text-recognition:16.0.1")
  implementation("com.google.mlkit:image-labeling:17.0.9")
