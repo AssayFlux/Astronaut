@@ -14,7 +14,8 @@ This file distinguishes implemented code from behavior that still requires hardw
 | Image OCR and ML Kit labels plus LiteRT-LM multimodal image input | Implemented code path | Requires a user-designated compatible multimodal .litertlm model; physical-device vision validation remains outstanding |
 | Local attachment retrieval | BM25 fallback plus optional ONNX WordPiece embeddings, hybrid cosine/BM25 ranking, encrypted persistent chunks and page labels | Requires a compatible user-imported ONNX embedding model + matching vocab; model compatibility and quality need device validation |
 | Offline speech input/output, language-pack discovery/download controls (Android 13+), and offline TTS voice selection | Implemented code path | Platform speech provider and local packs vary by OEM; physical airplane-mode and voice-quality validation remain outstanding |
-| SHA-256 verified HTTPS model download | Implemented | User must obtain checksum from a trusted publisher; no signed curated catalog |
+| SHA-256 verified HTTPS model download | Implemented | Publisher checksum must come from a trusted source; existing downloader does not yet support resumable partial files |
+| Signed model catalog parser, metadata validation, device compatibility checks, immutable versioned install store and rollback primitives | Implemented service layer | Publisher public key provisioning and Compose catalog browsing/install UI are not wired yet; actual model runtime compatibility requires device tests |
 | Sequential two-model review | Implemented | Requires two compatible imported models; sequential execution, not parallel agents |
 | Dataset validation and training API client/UI | Implemented | Training API must be configured and reachable |
 | Workspace/project assistant | Implemented | Not a full IDE, shell, Git client or safe autonomous build agent |
@@ -27,7 +28,8 @@ This file distinguishes implemented code from behavior that still requires hardw
 | JSONL validation and dataset registration | Implemented | Operational quotas, retention and multi-user authorization remain |
 | Celery/Redis GPU worker | Implemented | Must be deployed on a compatible CUDA host |
 | LoRA/QLoRA adapter training | Implemented code path | Validate model architecture, GPU/VRAM, dependency versions and real training run |
-| Adapter artifact and manifest | Implemented | PEFT adapter is not a directly importable `.litertlm`; conversion pipeline remains separate |
+| Adapter artifact and manifest | Implemented | PEFT adapter is not a directly importable `.litertlm` |
+| Mobile export packaging and provenance manifest | Implemented | Packages an artifact produced by an external converter; conversion algorithm and tensor/runtime validation remain external |
 
 ## Build and release
 
