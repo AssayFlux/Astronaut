@@ -88,6 +88,7 @@ The application ID and version name are intentionally preserved.
 - [APK build and installation](docs/APK_BUILD_GUIDE.md)
 - [Release signing](docs/RELEASE_SIGNING.md)
 - [Security and privacy review](docs/SECURITY_PRIVACY.md)
+- [Step 1 validation matrix](docs/STEP_1_VALIDATION.md)
 - [Offline features](docs/OFFLINE_FEATURES.md)
 - [Adding AI runtimes](docs/ADDING_AI_RUNTIMES.md)
 
