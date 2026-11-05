@@ -49,6 +49,17 @@ class ModelCatalogTest {
         assertEquals(9_000_000_000L, model.sizeBytes)
     }
 
+    @Test fun acceptsOnnxEmbeddingFormatWithMatchingRuntimeId() {
+        val onnx = modelJson()
+            .replace("chat-small.litertlm", "sentence-embedder.onnx")
+            .replace("\"format\":\"litertlm\",\"runtime\":\"litertlm\"", "\"format\":\"onnx\",\"runtime\":\"onnx-runtime-embeddings\"")
+            .replace("\"capabilities\":[\"chat\",\"code\"]", "\"capabilities\":[\"embedding\"]")
+        val model = ModelCatalogParser.parseVerifiedPayload(payload(onnx)).models.single()
+        assertEquals("onnx", model.format)
+        assertEquals("onnx-runtime-embeddings", model.runtime)
+        assertEquals(setOf(ModelCapability.EMBEDDING), model.capabilities)
+    }
+
     @Test fun rejectsArtifactsAboveFifteenGb() {
         val oversized = modelJson().replace("\"size_bytes\":1048576", "\"size_bytes\":15000000001")
         val error = runCatching { ModelCatalogParser.parseVerifiedPayload(payload(oversized)) }.exceptionOrNull()
