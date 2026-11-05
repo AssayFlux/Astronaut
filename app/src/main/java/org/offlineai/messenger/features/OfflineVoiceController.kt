@@ -69,9 +69,9 @@ class OfflineVoiceController(
         val normalized = normalizeLanguageTag(value)
         languageTag = normalized
         val language = Locale.forLanguageTag(normalized).language
-        selectedVoice = offlineVoices.firstOrNull { it.name == selectedVoiceName }
-            ?: offlineVoices.firstOrNull { it.locale.toLanguageTag().equals(normalized, true) }
+        selectedVoice = offlineVoices.firstOrNull { it.locale.toLanguageTag().equals(normalized, true) }
             ?: offlineVoices.firstOrNull { it.locale.language.equals(language, true) }
+            ?: offlineVoices.firstOrNull { it.name == selectedVoiceName }
             ?: offlineVoices.firstOrNull()
         selectedVoiceName = selectedVoice?.name
         selectedVoice?.let { textToSpeech?.voice = it }
@@ -83,7 +83,6 @@ class OfflineVoiceController(
         selectedVoice = voice
         selectedVoiceName = voice.name
         textToSpeech?.voice = voice
-        languageTag = voice.locale.toLanguageTag()
     }
 
     fun selectedTtsVoiceName(): String? = selectedVoice?.name
@@ -94,9 +93,9 @@ class OfflineVoiceController(
             .filterNot { it.isNetworkConnectionRequired }
             .sortedWith(compareBy<Voice>({ it.locale.displayName }, { -it.quality }, { it.name }))
         val language = Locale.forLanguageTag(languageTag).language
-        selectedVoice = offlineVoices.firstOrNull { it.name == selectedVoiceName }
-            ?: offlineVoices.firstOrNull { it.locale.toLanguageTag().equals(languageTag, true) }
+        selectedVoice = offlineVoices.firstOrNull { it.locale.toLanguageTag().equals(languageTag, true) }
             ?: offlineVoices.firstOrNull { it.locale.language.equals(language, true) }
+            ?: offlineVoices.firstOrNull { it.name == selectedVoiceName }
             ?: offlineVoices.firstOrNull()
         selectedVoiceName = selectedVoice?.name
         selectedVoice?.let { engine.voice = it }
