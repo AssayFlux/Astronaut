@@ -133,7 +133,7 @@ class OfflineVoiceController(
                     }
 
                     override fun onError(error: Int) {
-                        onError("Could not inspect offline speech languages (code $error).")
+                        this@OfflineVoiceController.onError("Could not inspect offline speech languages (code $error).")
                     }
                 }
             )
@@ -191,10 +191,7 @@ class OfflineVoiceController(
             return
         }
         try {
-            getOrCreateRecognizer().apply {
-                cancel()
-                startListening(recognitionIntent())
-            }
+            getOrCreateRecognizer().startListening(recognitionIntent())
         } catch (error: Throwable) {
             onListeningChanged(false)
             onError("Could not start offline speech recognition: ${error.message ?: error.javaClass.simpleName}")
