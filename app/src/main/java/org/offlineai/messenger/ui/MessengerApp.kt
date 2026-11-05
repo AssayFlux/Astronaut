@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.launch
 import org.offlineai.messenger.ai.LiteRtRuntime
+import org.offlineai.messenger.ai.ConversationPromptBuilder
+import org.offlineai.messenger.ai.PromptTurn
 import org.offlineai.messenger.data.*
 import java.io.File
 import java.util.UUID
