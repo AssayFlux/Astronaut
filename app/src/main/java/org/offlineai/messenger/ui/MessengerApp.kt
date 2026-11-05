@@ -495,7 +495,6 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   }else EmptyState("No dataset loaded","Choose a JSONL file containing text, prompt, or messages fields.")
   if(status.isNotBlank())Text(status,color=Green,style=MaterialTheme.typography.bodySmall)
   Divider()
-  Divider()
   Text("Optional workstation training",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
   Text("Training uploads the cleaned dataset to the HTTPS server you configure below. The API key is held only in this screen's memory and is not saved.",color=Muted,style=MaterialTheme.typography.bodySmall)
   var serverUrl by remember{mutableStateOf("")}
