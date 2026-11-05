@@ -29,6 +29,13 @@ import kotlinx.coroutines.launch
 import org.offlineai.messenger.ai.LiteRtRuntime
 import org.offlineai.messenger.ai.ConversationPromptBuilder
 import org.offlineai.messenger.ai.PromptTurn
+import org.offlineai.messenger.ai.Capability
+import org.offlineai.messenger.ai.CollaborationEngine
+import org.offlineai.messenger.ai.CollaborationResult
+import org.offlineai.messenger.ai.InferenceRequest
+import org.offlineai.messenger.ai.LiteRtModelProvider
+import org.offlineai.messenger.ai.ModelCatalog
+import org.offlineai.messenger.ai.ModelDescriptor
 import org.offlineai.messenger.data.*
 import org.offlineai.messenger.features.OfflineDocumentReader
 import org.offlineai.messenger.features.LocalRagIndex
@@ -40,7 +47,7 @@ private val Paper=Color(0xFFF4F2EA)
 private val Ink=Color(0xFF17231F)
 private val Green=Color(0xFF176B55)
 private val Muted=Color(0xFF65736D)
-private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WORKSPACE("Workspace"),SETTINGS("Settings")}
+private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MODELS("Models"),WORKSPACE("Workspace"),SETTINGS("Settings")}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun MessengerApp(){
@@ -62,6 +69,9 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
  var showNewProject by remember{mutableStateOf(false)}
  var projectName by remember{mutableStateOf("")}
  var projectDescription by remember{mutableStateOf("")}
+ var collaborationPrompt by remember{mutableStateOf("")}
+ var collaborationStatus by remember{mutableStateOf("Import two distinct compatible .litertlm models to enable collaboration.")}
+ var collaborating by remember{mutableStateOf(false)}
  val conversations by db.chatDao().conversations().collectAsState(initial=emptyList())
  val models by db.modelDao().models().collectAsState(initial=emptyList())
  val projects by db.workspaceDao().projects().collectAsState(initial=emptyList())
@@ -102,7 +112,7 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
    Text(section.label,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
   }},actions={if(section==Section.CHATS) IconButton(onClick={scope.launch{selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))}}){Icon(Icons.Default.Add,"New chat")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=Paper))},
    bottomBar={NavigationBar(containerColor=Color.White){Section.entries.forEach{item->
-    val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.MODELS->Icons.Default.Memory;Section.WORKSPACE->Icons.Default.FolderOpen;Section.SETTINGS->Icons.Default.Settings}
+    val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.WORKSPACE->Icons.Default.FolderOpen;Section.SETTINGS->Icons.Default.Settings}
     NavigationBarItem(selected=section==item,onClick={section=item},icon={Icon(icon,item.label)},label={Text(item.label,maxLines=1)})
    }}}
   ){padding->Column(Modifier.fillMaxSize().padding(padding)){
@@ -148,6 +158,55 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
        }
       }
      })
+    Section.AI_HUB->CollaborationScreen(models,collaborationPrompt,{collaborationPrompt=it},collaborationStatus,collaborating){
+     val prompt=collaborationPrompt.trim()
+     if(prompt.isNotBlank()&&!collaborating){
+      collaborating=true
+      scope.launch{
+       val previousPath=activeModelPath
+       val previousName=activeModelName
+       try{
+        if(previousPath!=null){runtime.unload();activeModelPath=null;activeModelName=null}
+        val target=conversationId?:db.chatDao().addConversation(ConversationEntity(title="Model collaboration"))
+        val provider=LiteRtModelProvider(context)
+        val catalog=ModelCatalog()
+        models.filter{it.modelPath!=null&&File(it.modelPath).isFile}.distinctBy{it.modelPath}.forEach{model->
+         catalog.register(ModelDescriptor(model.uri,model.displayName,provider.providerId,setOf(Capability.CHAT),true,localPath=model.modelPath))
+        }
+        val result=CollaborationEngine(listOf(provider),catalog).execute(
+         InferenceRequest(prompt,target),
+         setOf(Capability.CHAT),
+         provider
+        ){progress->collaborationStatus=progress}
+        when(result){
+         is CollaborationResult.Success->{
+          val report=buildString{
+           append("TWO-MODEL REVIEW\\n\\n")
+           result.participants.forEachIndexed{index,answer->
+            append("Independent model ").append(index+1).append(": ").append(answer.modelId).append(" (").append(answer.elapsedMs).append(" ms)\\n")
+            append(answer.text).append("\\n\\n")
+           }
+           append("COORDINATOR SYNTHESIS\\n").append(result.finalAnswer)
+          }
+          db.chatDao().addMessage(MessageEntity(conversationId=target,body=report,role="assistant"))
+          selectedConversation=target
+          section=Section.CHATS
+          collaborationStatus="Review completed. The report was saved to this conversation."
+         }
+         is CollaborationResult.Unavailable->collaborationStatus=result.reason
+        }
+       }catch(error:Throwable){
+        collaborationStatus="Collaboration failed: "+(error.message?:error.javaClass.simpleName)
+       }finally{
+        if(previousPath!=null&&File(previousPath).isFile){
+         try{runtime.load(previousPath);activeModelPath=previousPath;activeModelName=previousName}
+         catch(error:Throwable){activeModelPath=null;activeModelName=null;runtimeMessage="Could not restore active model: "+(error.message?:error.javaClass.simpleName)}
+        }
+        collaborating=false
+       }
+      }
+     }
+    }
     Section.MODELS->ModelsScreen(models,activeModelPath,activeModelName,runtimeMessage,loadingModel,{modelPicker.launch(arrayOf("*/*"))},{model->
      if(model.modelPath!=null){loadingModel=true;scope.launch{
       try{runtime.load(model.modelPath);activeModelPath=model.modelPath;activeModelName=model.displayName;runtimeMessage="Loaded "+model.displayName+". Chat is ready offline."}
@@ -226,6 +285,30 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
   }} }}
  }
 }
+@Composable private fun CollaborationScreen(
+ models:List<LocalModelEntity>,
+ prompt:String,
+ onPrompt:(String)->Unit,
+ status:String,
+ running:Boolean,
+ onRun:()->Unit
+){
+ val available=models.filter{it.modelPath!=null}.distinctBy{it.modelPath}
+ Column(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+  Text("Independent model review",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
+  Text("Astronaut runs two different local models one at a time, then asks a coordinator pass to compare their answers. This reduces peak RAM use; it can take several minutes on a phone.",color=Muted)
+  Text("Available local models: "+available.size,style=MaterialTheme.typography.labelLarge,color=Green)
+  available.forEach{model->Text("• "+model.displayName,style=MaterialTheme.typography.bodySmall,color=Muted)}
+  OutlinedTextField(prompt,onPrompt,modifier=Modifier.fillMaxWidth(),label={Text("Task for both models")},minLines=3,maxLines=6,enabled=!running)
+  Button(onClick=onRun,modifier=Modifier.fillMaxWidth(),enabled=!running&&prompt.isNotBlank()&&available.size>=2){
+   if(running)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp) else Icon(Icons.Default.Hub,null)
+   Spacer(Modifier.width(8.dp));Text(if(running)"Reviewing…" else "Run two-model review")
+  }
+  Text(status,color=if(running)Green else Muted,style=MaterialTheme.typography.bodySmall)
+  if(available.size<2)EmptyState("Two models required","Import at least two distinct .litertlm model files in Models. No model output is simulated.")
+ }
+}
+
 @Composable private fun WorkspaceScreen(projects:List<WorkspaceProjectEntity>,onAdd:()->Unit,onDelete:(Long)->Unit){
  Column(Modifier.fillMaxSize().padding(16.dp)){
   Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Developer workspace",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Organise local projects and notes.",color=Muted)};FilledTonalButton(onClick=onAdd){Icon(Icons.Default.Add,null);Text("New")}}
