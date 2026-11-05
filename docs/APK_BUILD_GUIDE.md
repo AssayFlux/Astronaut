@@ -79,7 +79,11 @@ On Windows PowerShell, replace `grep` with `Select-String`.
 
 Open the repository root in Android Studio, allow Gradle sync to complete, select the `app` run configuration and the `debug` build variant, then choose **Build > Build Bundle(s) / APK(s) > Build APK(s)**. Use JDK 17 and Gradle 8.13 in the IDE's Gradle settings.
 
-## CI and local test coverage\n\nThe Android workflow runs `:app:testDebugUnitTest`, `:app:connectedDebugAndroidTest` on an API 35 emulator, and `:app:assembleDebug`. The instrumentation smoke tests check the stable application ID, app-private storage and core permission declarations. The separate backend workflow runs pytest.\n\n## What this build does not prove
+## CI and local test coverage
+
+The Android workflow runs `:app:testDebugUnitTest`, `:app:connectedDebugAndroidTest` on an API 35 emulator, and `:app:assembleDebug`. The instrumentation smoke tests check the stable application ID, app-private storage and core permission declarations. The separate backend workflow runs pytest.
+
+## What this build does not prove
 
 A successful compile/unit-test run does not certify:
 
