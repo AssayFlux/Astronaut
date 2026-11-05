@@ -965,6 +965,9 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
 ){
  var languageDraft by remember(languageTag){mutableStateOf(languageTag)}
  var voiceMenu by remember{mutableStateOf(false)}
+ var languageMenu by remember{mutableStateOf(false)}
+ val languageOptions=(listOf(languageTag,java.util.Locale.getDefault().toLanguageTag(),"en-US","hi-IN","bn-IN")+recognition.installed+recognition.downloadable+recognition.pending).distinct()
+ val duplicateVoiceLabels=voices.groupingBy{it.label}.eachCount()
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)){
   Text("Personalization",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
   Text("Choose how Astronaut responds and how the interface looks. Preferences are stored on this device.",color=Muted,style=MaterialTheme.typography.bodySmall)
@@ -994,8 +997,16 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
   Text("Offline voice",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
   Text("Voice names are shown as readable languages and quality levels instead of Android's technical voice IDs. Tap a voice to select and preview it.",color=Muted,style=MaterialTheme.typography.bodySmall)
   Text("Speech recognition uses Android's on-device recognizer only. Text-to-speech is restricted to installed voices that do not require a network connection.",color=Muted,style=MaterialTheme.typography.bodySmall)
-  OutlinedTextField(languageDraft,{languageDraft=it},modifier=Modifier.fillMaxWidth(),label={Text("Speech language (BCP-47)")},placeholder={Text("en-US, hi-IN, bn-IN")},singleLine=true)
-  Button(onClick={onLanguageChange(languageDraft)},modifier=Modifier.fillMaxWidth()){Text("Apply speech language")}
+  Box{
+   OutlinedButton(onClick={languageMenu=true},modifier=Modifier.fillMaxWidth()){
+    Column(Modifier.weight(1f),horizontalAlignment=Alignment.Start){Text("Speech language",style=MaterialTheme.typography.labelSmall,color=Muted);Text(friendlyLanguageName(languageDraft),maxLines=1,overflow=TextOverflow.Ellipsis)}
+    Icon(Icons.Default.ExpandMore,null)
+   }
+   DropdownMenu(expanded=languageMenu,onDismissRequest={languageMenu=false}){
+    languageOptions.forEach{tag->DropdownMenuItem(text={Text(friendlyLanguageName(tag))},leadingIcon={if(tag.equals(languageDraft,true))Icon(Icons.Default.Check,null)},onClick={languageDraft=tag;languageMenu=false})}
+   }
+  }
+  Button(onClick={onLanguageChange(languageDraft)},modifier=Modifier.fillMaxWidth()){Text("Use this speech language")}
   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
    OutlinedButton(onClick=onCheckLanguages,modifier=Modifier.weight(1f)){Text("Check packs")}
    Button(onClick=onDownloadLanguage,modifier=Modifier.weight(1f),enabled=recognition.downloadable.isNotEmpty()){Text("Download pack")}
@@ -1009,8 +1020,8 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
     Text(voices.firstOrNull{it.name==selectedVoiceName}?.label?:if(voices.isEmpty())"No offline TTS voices installed" else voices.first().label)
    }
    DropdownMenu(expanded=voiceMenu,onDismissRequest={voiceMenu=false}){
-    voices.forEach{voice->DropdownMenuItem(
-     text={Column{Text(voice.label);Text("Installed on this device · offline",style=MaterialTheme.typography.labelSmall,color=Muted)}},
+    voices.forEachIndexed{index,voice->DropdownMenuItem(
+     text={Column{val duplicateCount=duplicateVoiceLabels[voice.label]?:0;val display=voice.label+(if(duplicateCount>1)" · Voice "+voices.take(index+1).count{it.label==voice.label} else "");Text(display);Text("Installed on this device · offline · tap to preview",style=MaterialTheme.typography.labelSmall,color=Muted)}},
      leadingIcon={Icon(Icons.Default.RecordVoiceOver,null)},
      onClick={voiceMenu=false;onVoiceSelect(voice.name);onTestVoice()}
     )}
