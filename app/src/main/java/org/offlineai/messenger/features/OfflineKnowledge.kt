@@ -84,8 +84,8 @@ class OfflineDocumentReader(private val context: Context) {
                     setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
                     setFeature("http://xml.org/sax/features/external-general-entities", false)
                     setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-                    setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
-                    setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
+                    runCatching { setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "") }
+                    runCatching { setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "") }
                 }
                 val document = factory.newDocumentBuilder().parse(org.xml.sax.InputSource(java.io.StringReader(xml)))
                 val nodes = document.getElementsByTagName("w:t")
