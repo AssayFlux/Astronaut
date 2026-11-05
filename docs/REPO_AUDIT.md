@@ -9,13 +9,13 @@ This source audit reflects the repository state reviewed on 2026-11-05. It separ
 - Product version name: `0.1.0`; Android `versionCode`: `7`. Keep the version name at `0.1.0`; versionCode must remain monotonic for upgrades.
 - Minimum Android API: 26; target API: 35; compile API: 36.
 - Model weights are not bundled in the APK.
-- Gradle wrapper scripts are not committed. CI installs Gradle 8.13 explicitly; local builds need a compatible Gradle installation.
+- Gradle 8.13 wrapper scripts and JAR are committed; local builds use the pinned wrapper distribution.
 
 ## Implemented Android capabilities and boundaries
 
 | Area | Code present | Remaining boundary |
 |---|---|---|
-| UI | Jetpack Compose screens for chat, AI Hub, models, collaboration, training, workspace and settings | UI polish and accessibility review; physical-device layout validation |
+| UI | Jetpack Compose screens for chat, AI Hub, models, collaboration, training, workspace and settings | Modernized chat history selection, message surfaces, theme accents and speech selection labels; continue accessibility and physical-device layout validation |
 | Chat and storage | Room persistence, conversation-scoped history, SQLCipher and Keystore-managed key material | Upgrade, interrupted migration, restore and key-recovery testing |
 | Local inference | LiteRT-LM engine for local `.litertlm` models | Only compatible artifacts run; model load, memory, thermal and lifecycle behavior need device testing |
 | Model acquisition | HTTPS download, resumable Range transfers, SHA-256 verification, local import | Test interruption/resume and checksum failures against real hosts |
