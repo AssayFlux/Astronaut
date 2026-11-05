@@ -63,6 +63,11 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle :app:assembleRelease --stacktrace
+      - name: Verify APK signature and application identity
+        run: |
+          APK="app/build/outputs/apk/release/app-release.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | grep -F "package: name='org.astronaut.agi' versionCode='7' versionName='0.1.0'"
       - uses: actions/upload-artifact@v4
         with:
           name: astronaut-signed-release-apk

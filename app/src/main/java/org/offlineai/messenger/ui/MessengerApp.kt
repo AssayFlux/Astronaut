@@ -2,6 +2,8 @@ package org.offlineai.messenger.ui
 
 import android.Manifest
 import android.content.Context
+import android.content.ComponentCallbacks2
+import android.content.res.Configuration
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -77,6 +79,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  val runtime= remember{LiteRtRuntime(context)}
  val scope= rememberCoroutineScope()
  var section by remember{mutableStateOf(Section.CHATS)}
+ var moreNavigationExpanded by remember{mutableStateOf(false)}
  var selectedConversation by remember{mutableStateOf<Long?>(null)}
  var draft by remember{mutableStateOf("")}
  var pendingAttachment by remember{mutableStateOf<Pair<Uri,String>?>(null)}
@@ -85,6 +88,26 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var activeModelName by remember{mutableStateOf<String?>(null)}
  var restoringActiveModel by remember{mutableStateOf(false)}
  var runtimeMessage by remember{mutableStateOf("Import a .litertlm model to start offline AI chat.")}
+ DisposableEffect(context,runtime){
+  val memoryCallbacks=object:ComponentCallbacks2{
+   override fun onConfigurationChanged(newConfig:Configuration) = Unit
+   override fun onLowMemory(){onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL)}
+   override fun onTrimMemory(level:Int){
+    if(level>=ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW&&activeModelPath!=null){
+     scope.launch{
+      runCatching{runtime.unload()}
+      activeModelPrefs.edit().remove("path").apply()
+      activeModelPath=null
+      activeModelName=null
+      runtimeMessage="Model unloaded to protect the app during memory pressure. Reload it from Models when memory is available."
+     }
+    }
+   }
+  }
+  context.registerComponentCallbacks(memoryCallbacks)
+  onDispose{context.unregisterComponentCallbacks(memoryCallbacks)}
+ }
+
  val personalizationPrefs=remember(context){context.getSharedPreferences("astronaut_personalization",Context.MODE_PRIVATE)}
  var responseStyle by remember{mutableStateOf(personalizationPrefs.getString("response_style","balanced")?:"balanced")}
  var darkAppearance by remember{mutableStateOf(personalizationPrefs.getBoolean("dark_appearance",false))}
@@ -277,10 +300,29 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    Text("ASTRONAUT",style=MaterialTheme.typography.labelMedium,color=Green,fontWeight=FontWeight.Bold)
    Text(section.label,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
   }},actions={if(section==Section.CHATS) IconButton(onClick={scope.launch{selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))}}){Icon(Icons.Default.Add,"New chat")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=MaterialTheme.colorScheme.background))},
-   bottomBar={NavigationBar(containerColor=MaterialTheme.colorScheme.surface){Section.entries.forEach{item->
-    val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.TRAINING->Icons.Default.Tune;Section.WORKSPACE->Icons.Default.FolderOpen;Section.ONLINE_AI->Icons.Default.Cloud;Section.SETTINGS->Icons.Default.Settings}
-    NavigationBarItem(selected=section==item,onClick={section=item},icon={Icon(icon,item.label)},label={Text(item.label,maxLines=1)})
-   }}}
+   bottomBar={NavigationBar(containerColor=MaterialTheme.colorScheme.surface, tonalElevation=6.dp){
+    val primarySections=listOf(Section.CHATS,Section.AI_HUB,Section.MODELS,Section.WORKSPACE)
+    primarySections.forEach{item->
+     val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.WORKSPACE->Icons.Default.FolderOpen;else->Icons.Default.MoreHoriz}
+     NavigationBarItem(selected=section==item,onClick={section=item;moreNavigationExpanded=false},icon={Icon(icon,item.label)},label={Text(item.label,maxLines=1)})
+    }
+    NavigationBarItem(
+     selected=section==Section.TRAINING||section==Section.ONLINE_AI||section==Section.SETTINGS,
+     onClick={moreNavigationExpanded=true},
+     icon={
+      Box{
+       Icon(Icons.Default.MoreHoriz,"More sections")
+       DropdownMenu(expanded=moreNavigationExpanded,onDismissRequest={moreNavigationExpanded=false}){
+        listOf(Section.TRAINING,Section.ONLINE_AI,Section.SETTINGS).forEach{item->
+         val icon=when(item){Section.TRAINING->Icons.Default.Tune;Section.ONLINE_AI->Icons.Default.Cloud;else->Icons.Default.Settings}
+         DropdownMenuItem(text={Text(item.label)},leadingIcon={Icon(icon,null)},onClick={section=item;moreNavigationExpanded=false})
+        }
+       }
+      }
+     },
+     label={Text("More")}
+    )
+   }}
   ){padding->Column(Modifier.fillMaxSize().padding(padding)){
    when(section){
     Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,activeModelName,runtimeMessage,loadingModel,sending,voiceListening,

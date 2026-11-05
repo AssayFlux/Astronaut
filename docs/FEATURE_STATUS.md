@@ -9,12 +9,12 @@ This file distinguishes implemented code from behavior that still requires hardw
 | Kotlin/Compose Android app, ID `org.astronaut.agi` | Implemented | Build and install on target devices |
 | Persistent chats and workspace conversations | Implemented | Exercise restore, deletion and upgrade paths on device |
 | SQLCipher database and Keystore key management | Implemented | Test fresh install, legacy migration, interrupted migration and backup/restore |
-| LiteRT-LM model import/load/unload and local text inference | Implemented | Test supported model files, token generation, low-RAM behavior and lifecycle on device |
+| LiteRT-LM model import/load/unload and local text inference | Implemented, with Android memory-pressure unload handling | Test supported model files, token generation, low-RAM behavior and lifecycle on device |
 | PDF, DOCX, text and image attachment extraction | Implemented | OCR accuracy and large-file behavior require device tests |
 | Image OCR and ML Kit labels plus LiteRT-LM multimodal image input | Implemented code path | Requires a user-designated compatible multimodal .litertlm model; physical-device vision validation remains outstanding |
 | Local attachment retrieval | BM25 fallback plus optional ONNX WordPiece embeddings, hybrid cosine/BM25 ranking, encrypted persistent chunks and page labels | Requires a compatible user-imported ONNX embedding model + matching vocab; model compatibility and quality need device validation |
 | Offline speech input/output, language-pack discovery/download controls (Android 13+), and offline TTS voice selection | Implemented code path | Platform speech provider and local packs vary by OEM; physical airplane-mode and voice-quality validation remain outstanding |
-| SHA-256 verified HTTPS model download | Implemented with persistent Range resume and checksum verification | Resume depends on server Range support; interrupted and resumed transfers still need device/network testing |
+| SHA-256 verified HTTPS model download | Implemented with persistent Range resume, cancellation-aware transfer/hash loops and checksum verification | Resume depends on server Range support; interrupted, cancelled and resumed transfers still need device/network testing |
 | Signed model catalog, device compatibility checks, immutable versioned install store | Implemented and connected to Models UI; Ed25519 verification uses an API 26-compatible provider | Publisher must generate/protect a real signing key and configure Gradle properties; automatic background update checks remain; rollback UI is implemented but needs real-version validation; actual model runtime compatibility requires device tests |
 | Sequential two-model review | Implemented | Requires two compatible imported models; sequential execution, not parallel agents |
 | Dataset validation and training API client/UI | Implemented | Training API must be configured and reachable |
@@ -33,8 +33,9 @@ This file distinguishes implemented code from behavior that still requires hardw
 
 ## Build and release
 
-- [x] Android unit-test GitHub Actions workflow (APK assembly is manual)
-- [ ] Manual debug/release APK assembly and installation by the owner
+- [x] Android JVM unit-test GitHub Actions workflow\n- [x] Android emulator instrumentation smoke tests in CI\n- [x] Debug APK assembly and artifact upload in CI\n- [x] Backend pytest CI workflow
+- [x] Security/privacy source checklist and model publisher key lifecycle documentation
+- [ ] Manual physical-device APK installation and validation by the owner
 - [ ] Production signing with owner-provided keystore and CI secrets
 - [x] Separate signed-release workflow
 - [ ] Physical-device test matrix and performance profiling

@@ -2,7 +2,7 @@
 
 ## CI versus manual APK testing
 
-GitHub Actions runs Android JVM/unit tests only. It does not assemble or upload an APK. APK assembly and installation are intentionally left to the owner for manual testing.
+GitHub Actions runs Android JVM/unit tests, Android emulator instrumentation smoke tests, and assembles/uploads a debug APK artifact. Physical installation and real-device inference/performance testing remain the owner's responsibility.
 
 The repository currently contains `gradle/wrapper/gradle-wrapper.properties` but does not contain `gradlew`, `gradlew.bat` or `gradle-wrapper.jar`. Do not run `./gradlew` or `gradlew.bat` until a complete wrapper is committed. Use an installed Gradle 8.13 distribution or Android Studio's compatible Gradle integration.
 
@@ -79,7 +79,7 @@ On Windows PowerShell, replace `grep` with `Select-String`.
 
 Open the repository root in Android Studio, allow Gradle sync to complete, select the `app` run configuration and the `debug` build variant, then choose **Build > Build Bundle(s) / APK(s) > Build APK(s)**. Use JDK 17 and Gradle 8.13 in the IDE's Gradle settings.
 
-## What this build does not prove
+## CI and local test coverage\n\nThe Android workflow runs `:app:testDebugUnitTest`, `:app:connectedDebugAndroidTest` on an API 35 emulator, and `:app:assembleDebug`. The instrumentation smoke tests check the stable application ID, app-private storage and core permission declarations. The separate backend workflow runs pytest.\n\n## What this build does not prove
 
 A successful compile/unit-test run does not certify:
 

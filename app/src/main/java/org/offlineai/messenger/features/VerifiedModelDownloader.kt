@@ -105,11 +105,14 @@ class VerifiedModelDownloader(context: Context) {
                     }
                 }
                 require(total == null || downloaded == total) { "Download ended early; partial bytes were retained for resume." }
+                currentCoroutineContext().ensureActive()
                 val actual = sha256(partial)
+                currentCoroutineContext().ensureActive()
                 if (!actual.equals(digestKey, true)) {
                     partial.delete()
                     error("SHA-256 mismatch. Expected $digestKey but received $actual. Partial bytes were discarded.")
                 }
+                currentCoroutineContext().ensureActive()
                 check(partial.renameTo(target)) { "Could not publish verified model into private storage." }
                 withContext(Dispatchers.Main) { onProgress(downloaded, total ?: downloaded) }
                 return@withContext DownloadedModel(target, actual, downloaded)

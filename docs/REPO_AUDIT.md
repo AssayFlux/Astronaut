@@ -46,7 +46,7 @@ This source audit reflects the repository state reviewed on 2026-11-05. It separ
 ## Remaining engineering work
 
 1. Configure and publish a real signed model catalogue; protect the Ed25519 private key and document key rotation/revocation.
-2. Add Android instrumentation tests for database creation/migrations, model import/download, lifecycle and permission flows.
+2. Extend Android instrumentation coverage to database creation/migrations, model import/download, lifecycle and runtime permission flows; the current smoke tests cover application identity, private storage and declared permissions.
 3. Validate LiteRT-LM text and multimodal models on target devices; profile peak RAM, startup, token speed, battery and thermal behavior.
 4. Benchmark retrieval against a labelled query/document set; validate tokenizer compatibility and source attribution.
 5. Test airplane-mode speech recognition and TTS on supported OEMs; decide whether a bundled offline speech engine is needed for broader coverage.

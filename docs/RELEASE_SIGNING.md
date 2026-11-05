@@ -35,7 +35,7 @@ base64 < astronaut-release.jks | tr -d '\n'
 
 Run the **Signed Android release** workflow manually from the Actions tab, or push a version tag beginning with `v`. For tag-triggered releases, the workflow verifies that the tag version matches Android's `versionName` (currently `0.1.0`). The workflow refuses to run without all four secrets and uploads `astronaut-signed-release-apk`.
 
-The release workflow builds `:app:assembleRelease`; it does not run as part of ordinary unit-test CI. The release APK is intended for distribution only after physical-device QA and security review.
+The release workflow builds `:app:assembleRelease`, verifies the APK signature with `apksigner`, and checks the package ID, version code and version name before uploading the artifact. It does not run as part of ordinary debug CI. The release APK is intended for distribution only after physical-device QA and security review.
 
 ## Local signed release build
 
