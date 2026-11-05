@@ -1,7 +1,7 @@
 # Astronaut
 
 <p align="center">
-  <img src="Assets/Icon.png" alt="Astronaut app icon" width="480" />
+  <img src="Assets/icon.svg" alt="Astronaut app icon" width="320" />
 </p>
 
 <h3 align="center">Private AI. On your device.</h3>
@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/license-MIT-64748B" alt="MIT license" />
 </p>
 
-Astronaut is an offline-first Android AI workspace. It keeps conversations and imported models on-device, runs supported LiteRT-LM models locally, and offers optional tools for documents, image understanding, retrieval, voice and development workflows.
+Astronaut is an offline-first Android AI workspace with a refreshed card-based interface, pastel personalization palette, keyboard-aware chat composer and configurable prompt-context optimization. It keeps conversations and imported models on-device, runs supported LiteRT-LM models locally, and offers optional tools for documents, image understanding, retrieval, voice and development workflows.
 
 ## What is included
 
