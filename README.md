@@ -1,7 +1,7 @@
 # Astronaut
 
 <p align="center">
-  <img src="Assets/Icon.png" alt="Astronaut app icon" width="480" />
+  <img src="Assets/Icon.svg" alt="Astronaut app icon" width="480" />
 </p>
 
 <h3 align="center">Private AI. On your device.</h3>
@@ -40,16 +40,18 @@ Image generation and general-purpose GGUF inference are not currently integrated
 - Android 8.0 / API 26 or newer
 - JDK 17
 - Android SDK Platform 36 and Build-Tools 36.0.0
-- Gradle 8.13
+- Gradle 8.13 (automatically provisioned by the included wrapper)
 
 ## Build and test
 
 Run from the repository root:
 
 ```bash
-gradle --no-daemon :app:testDebugUnitTest
-gradle --no-daemon :app:assembleDebug
+./gradlew --no-daemon :app:testDebugUnitTest
+./gradlew --no-daemon :app:assembleDebug
 ```
+
+On Windows, use `gradlew.bat` with the same tasks. The first run downloads the pinned Gradle 8.13 distribution.
 
 The Android CI workflow also runs emulator instrumentation smoke tests and assembles the debug APK. Backend tests run separately with pytest.
 
