@@ -1,105 +1,166 @@
-# The Astronaut
+# ASTRONAUT
 
 <p align="center">
-  <img src="Assets/icon.svg" alt="Astronaut app icon" width="320" />
+  <img src="Assets/icon.svg" alt="Astronaut app icon" width="220" />
 </p>
 
-<h3 align="center">Private AI. On your device.</h3>
-<p align="center"><strong>Chat · Code · Understand · Work offline</strong></p>
+<p align="center"><strong>Private AI. On your device.</strong></p>
+<p align="center">An offline-first Android AI workspace for chat, coding, documents and local models.</p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+" />
-  <img src="https://img.shields.io/badge/version-0.1.0-7C3AED" alt="Version 0.1.0" />
-  <img src="https://img.shields.io/badge/license-MIT-64748B" alt="MIT license" />
-</p>
+---
 
-Astronaut is an offline-first Android AI workspace with a refreshed card-based interface, pastel personalization palette, keyboard-aware chat composer and configurable prompt-context optimization. It keeps conversations and imported models on-device, runs supported LiteRT-LM models locally, and offers optional tools for documents, image understanding, retrieval, voice and development workflows.
+## Overview
 
-## What is included
+Astronaut is an Android application designed to keep conversations, imported models and workspace data on the device. It combines a clean, card-based interface with local AI inference, model management, document tools and optional developer/training workflows.
 
-| Area | Current implementation |
+The app supports compatible LiteRT-LM models for local text inference and multimodal image understanding, plus an ONNX-based embedding path for retrieval. Remote AI and the optional training backend are opt-in features; local chat does not silently fall back to cloud inference.
+
+## At a glance
+
+| Item | Details |
 |---|---|
-| Private chat | Minimal conversation switcher, distinct assistant/user surfaces, local inference and encrypted database |
-| Model library | Local import, HTTPS downloads, SHA-256 verification, signed catalog validation, versioned installs and rollback |
+| Platform | Android |
+| Application ID | `org.astronaut.agi` |
+| Version | `0.1.0` (version code `7`) |
+| Minimum Android | Android 8.0 (API 26) |
+| Compile SDK | 36 |
+| Language and UI | Kotlin, Jetpack Compose |
+| Build system | Gradle wrapper 8.13 |
+| Java toolchain | JDK 17 |
+| Local inference | LiteRT-LM for supported models |
+| Retrieval | BM25 with optional ONNX MiniLM embeddings |
+| Database | Room with SQLCipher |
+| License | MIT |
+
+## Features
+
+| Area | Included functionality |
+|---|---|
+| AI chat | On-device conversations, persistent chat history, response-style preferences and local inference |
+| Model hub | Model import, HTTPS downloads, SHA-256 verification, signed catalog validation, versioned installs and rollback controls |
+| Model safety | Runtime compatibility checks, Android API checks and memory preflight estimates |
 | Documents | PDF, DOCX and text extraction with bounded processing |
-| Images | OCR and image labels; multimodal image input through compatible LiteRT-LM models |
-| Retrieval | BM25 search with optional ONNX MiniLM embeddings and matching vocabulary |
-| Voice | Android speech recognition, readable language selection, local voice quality labels and voice preview |
-| Workspace | Local projects and a SAF-scoped text editor |
-| Collaboration | Sequential review using two distinct local models |
-| Optional training | Separate FastAPI/Celery backend for dataset validation and training job management |
+| Image understanding | OCR, image labels and multimodal input through compatible LiteRT-LM models |
+| Knowledge retrieval | Local BM25 search and optional ONNX embedding-based hybrid retrieval |
+| Voice | Android speech recognition, offline language-pack controls and local TTS voice selection/preview |
+| Workspace | Local projects, conversations and a SAF-scoped text editor |
+| Model collaboration | Sequential review using two distinct compatible local models |
+| Developer Studio | Project-folder browsing and bounded UTF-8 text editing |
+| Training Studio | Dataset validation and training-job management through an optional backend |
+| Personalisation | Light/dark themes, five accent colours and concise, balanced or detailed response styles |
 
-## Personalisation
+## Runtime and model compatibility
 
-Choose light or dark appearance, one of five accent colours, concise/balanced/detailed responses, a readable speech language, and an installed offline TTS voice. Voice choices are labelled by language and quality rather than opaque Android engine IDs; selecting one previews it.
+A model being downloadable or smaller than the import limit does **not** mean that it can execute on the device. The app only loads artifacts supported by an installed runtime adapter and compatible model metadata.
 
-## Runtime support is explicit
+| Model / artifact type | Current status | Notes |
+|---|---|---|
+| LiteRT-LM (`.litertlm`) | Runtime integrated | Supports compatible local text and multimodal models |
+| ONNX | Runtime integrated for embeddings | MiniLM-compatible embedding models and matching vocabulary are required for semantic retrieval |
+| GGUF | Catalog/import representation only | llama.cpp Android runtime is not bundled |
+| Diffusion / Safetensors bundles | Catalog/import representation only | No executable on-device image-generation runtime is bundled |
+| Whisper / Sherpa-ONNX | Catalog/import representation only | Independent speech runtimes are not bundled |
+| TFLite | Catalog format represented | Availability depends on a dedicated compatible adapter |
 
-The current Android build includes LiteRT-LM for compatible `.litertlm` chat/vision models and ONNX Runtime for the supported embedding path. GGUF/llama.cpp, diffusion image generation, Whisper and Sherpa-ONNX artifacts may be described or downloaded by the catalog, but their execution runtimes are **not bundled** in this build. A model file extension alone never means it can run.
+**Not currently included:** general-purpose GGUF inference, diffusion image generation, a full IDE with Git/build/shell execution, or model weights bundled in the APK. Do not treat a catalog entry or file extension as proof of runtime support.
 
-Image generation and general-purpose GGUF inference are not currently integrated. Models are not bundled in the APK.
+## Privacy and security
+
+| Principle | Implementation |
+|---|---|
+| Local-first | Chats and imported model files are stored locally |
+| Encrypted app data | SQLCipher database with Android Keystore-backed key handling |
+| Verified downloads | SHA-256 checksum verification and resumable HTTPS downloads |
+| Trusted catalog | Ed25519 signature verification; publisher must configure a real public key and catalog endpoint |
+| Optional cloud use | Explicitly configured remote provider; no automatic fallback from local inference |
+| Backend connectivity | Optional and user-configured; private chat data is not silently uploaded |
+| Secrets | Signing keys, keystores and passwords must remain outside the repository |
+
+The signed model catalog is disabled until the publisher provisions a real Ed25519 key pair and configures the catalog URL and public key. The private signing key must remain in a protected publisher environment.
 
 ## Requirements
 
-- Android 8.0 / API 26 or newer
-- JDK 17
-- Android SDK Platform 36 and Build-Tools 36.0.0
-- Gradle 8.13 (automatically provisioned by the included wrapper)
+| Requirement | Version / value |
+|---|---|
+| Android SDK Platform | 36 |
+| Android Build-Tools | 36.0.0 |
+| JDK | 17 |
+| Gradle | Use the committed wrapper (8.13) |
+| Android device | API 26 or newer |
 
-## Build and test
+## Build a debug APK
 
-Run from the repository root:
+Run these commands from the repository root. The command below assembles the debug APK only; it does not run emulator instrumentation tests or any workflow.
 
 ```bash
-./gradlew --no-daemon :app:testDebugUnitTest
+chmod +x ./gradlew
 ./gradlew --no-daemon :app:assembleDebug
 ```
 
-On Windows, use `gradlew.bat` with the same tasks. The first run downloads the pinned Gradle 8.13 distribution.
+Expected output:
 
-The Android CI workflow also runs emulator instrumentation smoke tests and assembles the debug APK. Backend tests run separately with pytest.
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
 
-Expected APK: `app/build/outputs/apk/debug/app-debug.apk`
+For Termux-specific setup and copy/install commands, see `docs/APK_BUILD_GUIDE.md`.
 
-See [APK build and installation](docs/APK_BUILD_GUIDE.md) for device setup and manual verification.
+### Optional: run local unit tests separately
 
-## Signed model catalog setup
+```bash
+./gradlew --no-daemon :app:testDebugUnitTest
+```
 
-The catalog is intentionally disabled until the publisher provisions a real Ed25519 key and catalog endpoint. For a release build, supply:
+### Install with ADB
 
-- `ASTRONAUT_CATALOG_URL`: HTTPS URL of the signed catalog envelope.
-- `ASTRONAUT_CATALOG_PUBLIC_KEY`: Base64 X.509 Ed25519 public key.
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
-These are Gradle properties, for example in a local untracked `~/.gradle/gradle.properties`. In GitHub Actions, expose them as `ORG_GRADLE_PROJECT_ASTRONAUT_CATALOG_URL` and `ORG_GRADLE_PROJECT_ASTRONAUT_CATALOG_PUBLIC_KEY` environment variables. Do not place the private signing key in either configuration. The app needs only the public key. Keep the private signing key in a protected publisher environment; never commit it or package it in the APK. See [model catalog and key management](docs/MODEL_ECOSYSTEM.md).
+No AI model weights are bundled in the APK. Import a compatible model after installing the app.
 
-## Release signing
+## Optional signed model catalog configuration
 
-Production signing uses an owner-controlled Android keystore and the separate Signed Android release workflow. Configure the four required GitHub Actions secrets as documented in [release signing](docs/RELEASE_SIGNING.md). Never commit a keystore or passwords.
+Provide these Gradle properties only after a publisher has created and secured the catalog:
 
-## Identity
+| Property | Purpose |
+|---|---|
+| `ASTRONAUT_CATALOG_URL` | HTTPS URL of the signed catalog envelope |
+| `ASTRONAUT_CATALOG_PUBLIC_KEY` | Base64 X.509 Ed25519 public key |
 
-- Android application ID: `org.astronaut.agi`
-- Android Gradle namespace: `org.offlineai.messenger`
-- Version name: `0.1.0`
-- Version code: `7`
+For local builds, place the values in an untracked `~/.gradle/gradle.properties`. For GitHub Actions, use `ORG_GRADLE_PROJECT_ASTRONAUT_CATALOG_URL` and `ORG_GRADLE_PROJECT_ASTRONAUT_CATALOG_PUBLIC_KEY`. Never store the private signing key in Gradle properties, the repository or the APK.
 
-The application ID and version name are intentionally preserved.
+## Project documentation
 
-## Documentation
+| Document | Description |
+|---|---|
+| `docs/PRODUCT_ARCHITECTURE.md` | Product boundaries, architecture and data ownership |
+| `docs/FEATURE_STATUS.md` | Implemented code paths and outstanding validation |
+| `docs/REPO_AUDIT.md` | Repository audit and engineering notes |
+| `docs/MODEL_ECOSYSTEM.md` | Model catalog, compatibility and signing |
+| `docs/APK_BUILD_GUIDE.md` | APK build, install and device verification |
+| `docs/RELEASE_SIGNING.md` | Production signing setup |
+| `docs/SECURITY_PRIVACY.md` | Security and privacy review |
+| `docs/STEP_1_VALIDATION.md` | Validation matrix |
+| `docs/OFFLINE_FEATURES.md` | Offline capability notes |
+| `docs/ADDING_AI_RUNTIMES.md` | Runtime adapter integration guide |
 
-- [Product architecture](docs/PRODUCT_ARCHITECTURE.md)
-- [Feature and validation status](docs/FEATURE_STATUS.md)
-- [Repository audit](docs/REPO_AUDIT.md)
-- [Model catalog, compatibility and signing](docs/MODEL_ECOSYSTEM.md)
-- [APK build and installation](docs/APK_BUILD_GUIDE.md)
-- [Release signing](docs/RELEASE_SIGNING.md)
-- [Security and privacy review](docs/SECURITY_PRIVACY.md)
-- [Step 1 validation matrix](docs/STEP_1_VALIDATION.md)
-- [Offline features](docs/OFFLINE_FEATURES.md)
-- [Adding AI runtimes](docs/ADDING_AI_RUNTIMES.md)
+## Development and validation status
 
-## Development status
+Astronaut is under active development. Implemented code paths are not the same as completed device certification.
 
-Astronaut is under active development. CI can verify compilation and automated tests, but it cannot certify a particular model on a particular phone. LiteRT-LM inference, image Q&A, offline speech packs, storage recovery, RAM use, battery use and thermal behavior still require physical-device validation.
+| Validation area | Status |
+|---|---|
+| Android compilation and automated tests | Available through the repository build/CI configuration |
+| LiteRT-LM model compatibility and inference | Requires testing with supported model artifacts on physical devices |
+| Multimodal image understanding | Requires a compatible model and physical-device validation |
+| Offline speech recognition and TTS | Depends on Android speech services, OEM support and installed language packs |
+| Download resume and catalog publishing | Requires testing against production HTTPS/Range hosting and a provisioned signed catalog |
+| Large-model memory, thermal and battery behaviour | Requires physical-device profiling |
+| Production signing and release approval | Requires owner-controlled keystore and final review |
 
-Contributions that improve the existing offline-first architecture, tests, accessibility and runtime compatibility are welcome.
+The optional training backend requires separate deployment and configuration. A successful APK build does not validate model compatibility, offline speech packs, device performance or backend availability.
+
+## Contributing
+
+Contributions are welcome in areas such as runtime compatibility, accessibility, security, documentation and automated tests. Please keep offline-first behaviour explicit, verify model artifacts before loading, and document device-specific limitations rather than claiming unsupported capabilities.
