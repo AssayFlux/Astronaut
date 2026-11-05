@@ -1,44 +1,64 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">Astronaut</title>
-  <desc id="desc">A friendly astronaut helmet with a deep violet visor, floating among stars on a lavender space background.</desc>
+  <title id="title">Astronaut — Beyond the ordinary</title>
+  <desc id="desc">A sleek white astronaut helmet framed by a luminous emerald and scarlet orbital halo on a rich green-to-red space gradient.</desc>
   <defs>
-    <linearGradient id="space" x1="48" y1="24" x2="464" y2="492" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#D9B5FF"/><stop offset="1" stop-color="#A96AF0"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#063F32"/><stop offset=".46" stop-color="#10251F"/><stop offset="1" stop-color="#65172B"/>
     </linearGradient>
-    <linearGradient id="helmet" x1="150" y1="92" x2="365" y2="356" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9E3F2"/>
+    <radialGradient id="greenGlow" cx="0" cy="0" r="1" gradientTransform="matrix(210 0 0 230 112 170)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18E69A" stop-opacity=".55"/><stop offset="1" stop-color="#18E69A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="redGlow" cx="0" cy="0" r="1" gradientTransform="matrix(190 0 0 230 410 340)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF3158" stop-opacity=".5"/><stop offset="1" stop-color="#FF3158" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="orbit" x1="78" y1="119" x2="435" y2="410" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#62FFC0"/><stop offset=".48" stop-color="#E7FFF5"/><stop offset="1" stop-color="#FF526F"/>
     </linearGradient>
-    <linearGradient id="visor" x1="184" y1="140" x2="342" y2="322" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#48245E"/><stop offset="1" stop-color="#21102F"/>
+    <linearGradient id="shell" x1="155" y1="106" x2="361" y2="385" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/><stop offset=".55" stop-color="#E9F2EF"/><stop offset="1" stop-color="#AFC8C0"/>
     </linearGradient>
-    <linearGradient id="suit" x1="176" y1="322" x2="338" y2="480" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#DCD3E8"/>
+    <linearGradient id="glass" x1="177" y1="143" x2="342" y2="326" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#263D46"/><stop offset=".55" stop-color="#101D2A"/><stop offset="1" stop-color="#080F1A"/>
     </linearGradient>
+    <linearGradient id="reflection" x1="185" y1="158" x2="275" y2="253" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B8FFE3" stop-opacity=".95"/><stop offset="1" stop-color="#B8FFE3" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="suit" x1="176" y1="343" x2="336" y2="490" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FFFC"/><stop offset="1" stop-color="#A8C4BA"/>
+    </linearGradient>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#space)"/>
-  <circle cx="256" cy="250" r="188" fill="#F5E9FF" opacity=".12"/>
-  <path d="M76 346c55-33 100-45 151-43 73 3 120 33 209 9" fill="none" stroke="#F8EEFF" stroke-width="3" opacity=".24"/>
-  <g fill="#FFF8FF">
-    <path d="M112 133l6 15 15 6-15 6-6 15-6-15-15-6 15-6z"/>
-    <path d="M394 112l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" opacity=".9"/>
-    <path d="M411 333l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" opacity=".8"/>
-    <circle cx="104" cy="267" r="5" opacity=".75"/><circle cx="373" cy="407" r="4" opacity=".8"/><circle cx="333" cy="78" r="3" opacity=".8"/>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#greenGlow)"/>
+  <rect width="512" height="512" rx="112" fill="url(#redGlow)"/>
+  <circle cx="256" cy="247" r="192" fill="none" stroke="#FFFFFF" stroke-opacity=".07" stroke-width="1.5"/>
+  <ellipse cx="256" cy="254" rx="196" ry="119" transform="rotate(-34 256 254)" fill="none" stroke="url(#orbit)" stroke-width="13" opacity=".18" filter="url(#soft)"/>
+  <ellipse cx="256" cy="254" rx="196" ry="119" transform="rotate(-34 256 254)" fill="none" stroke="url(#orbit)" stroke-width="5.5" opacity=".92"/>
+  <path d="M82 364c34-27 59-54 78-83" fill="none" stroke="#51F5B1" stroke-width="8" stroke-linecap="round" opacity=".9"/>
+  <path d="M354 184c23-22 49-39 76-50" fill="none" stroke="#FF536D" stroke-width="8" stroke-linecap="round" opacity=".95"/>
+  <g fill="#E9FFF6">
+    <path d="m110 120 5 13 13 5-13 5-5 13-5-13-13-5 13-5z"/>
+    <path d="m405 327 4 10 10 4-10 4-4 10-4-10-10-4 10-4z" opacity=".9"/>
+    <circle cx="393" cy="155" r="4"/><circle cx="119" cy="294" r="3" opacity=".8"/><circle cx="340" cy="83" r="3" opacity=".7"/>
   </g>
-  <ellipse cx="256" cy="441" rx="128" ry="20" fill="#5B2C7D" opacity=".18"/>
-  <path d="M145 451c5-54 37-91 83-105l28-8 28 8c46 14 78 51 83 105l2 25H143z" fill="url(#suit)" stroke="#392047" stroke-width="12" stroke-linejoin="round"/>
-  <path d="M199 363c13 22 32 34 57 34s44-12 57-34l-12-20c-14-9-29-14-45-14s-31 5-45 14z" fill="#C9BED4" stroke="#392047" stroke-width="9" stroke-linejoin="round"/>
-  <path d="M216 393c12 12 25 18 40 18s28-6 40-18" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/>
-  <path d="M181 440c20-18 43-27 75-27s55 9 75 27" fill="none" stroke="#C8BDD3" stroke-width="8" stroke-linecap="round"/>
-  <path d="M132 219c0-78 55-137 124-137s124 59 124 137v20c0 72-55 127-124 127s-124-55-124-127z" fill="url(#helmet)" stroke="#392047" stroke-width="13" stroke-linejoin="round"/>
-  <path d="M143 222c0-68 49-119 113-119s113 51 113 119v17c0 62-49 109-113 109s-113-47-113-109z" fill="#F8F5FC" stroke="#6A4A78" stroke-width="6"/>
-  <path d="M166 222c0-55 39-96 90-96s90 41 90 96v18c0 49-39 86-90 86s-90-37-90-86z" fill="url(#visor)" stroke="#392047" stroke-width="9" stroke-linejoin="round"/>
-  <path d="M185 192c13-31 39-49 72-51-26 12-43 30-52 54-5 13-7 28-7 42-13-9-20-24-13-45z" fill="#BCA8C8" opacity=".82"/>
-  <path d="M207 291c28 17 69 18 99 0" fill="none" stroke="#12091C" stroke-width="8" stroke-linecap="round" opacity=".75"/>
-  <ellipse cx="308" cy="202" rx="17" ry="21" fill="#F6EFFF" opacity=".68"/><circle cx="322" cy="244" r="7" fill="#F6EFFF" opacity=".65"/>
-  <path d="M121 212c-22 5-35 25-35 48s13 43 35 48l18-14V226z" fill="#F5F0FA" stroke="#392047" stroke-width="11" stroke-linejoin="round"/>
-  <path d="M391 212c22 5 35 25 35 48s-13 43-35 48l-18-14v-68z" fill="#F5F0FA" stroke="#392047" stroke-width="11" stroke-linejoin="round"/>
-  <path d="M100 244c-5 11-5 22 0 33" fill="none" stroke="#B9A9C6" stroke-width="7" stroke-linecap="round"/><path d="M412 244c5 11 5 22 0 33" fill="none" stroke="#B9A9C6" stroke-width="7" stroke-linecap="round"/>
-  <path d="M235 433l21-15 21 15-8 25h-26z" fill="#6E36A0" stroke="#392047" stroke-width="6" stroke-linejoin="round"/>
-  <path d="M256 424l5 11-5 12-5-12z" fill="#FFFFFF"/>
+  <ellipse cx="256" cy="458" rx="105" ry="15" fill="#020A0B" opacity=".35"/>
+  <path d="M151 465c5-52 34-91 82-111l23-9 23 9c48 20 77 59 82 111l1 17H150z" fill="url(#suit)" stroke="#142A2A" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M205 373c13 19 30 29 51 29s38-10 51-29l-10-20c-12-8-26-12-41-12s-29 4-41 12z" fill="#B7CDC4" stroke="#24423D" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M211 427c14 11 29 16 45 16s31-5 45-16" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity=".85"/>
+  <path d="M131 224c0-79 54-139 125-139s125 60 125 139v18c0 76-55 132-125 132s-125-56-125-132z" fill="url(#shell)" stroke="#132A2B" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M145 225c0-68 47-121 111-121s111 53 111 121v17c0 64-47 113-111 113s-111-49-111-113z" fill="#F5FBF8" stroke="#76968B" stroke-width="5"/>
+  <path d="M166 225c0-55 38-98 90-98s90 43 90 98v17c0 51-38 89-90 89s-90-38-90-89z" fill="url(#glass)" stroke="#183331" stroke-width="9" stroke-linejoin="round"/>
+  <path d="M185 196c13-34 38-53 73-56-27 13-45 33-54 58-5 14-7 28-7 42-14-10-20-25-12-44z" fill="url(#reflection)"/>
+  <path d="M203 292c27 15 65 16 94 0" fill="none" stroke="#071218" stroke-width="8" stroke-linecap="round" opacity=".8"/>
+  <ellipse cx="307" cy="205" rx="16" ry="20" fill="#D9FFF0" opacity=".82"/>
+  <circle cx="322" cy="247" r="7" fill="#D9FFF0" opacity=".72"/>
+  <path d="M119 217c-20 6-31 24-31 48s11 42 31 48l19-15v-66z" fill="#E8F3EE" stroke="#183331" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M393 217c20 6 31 24 31 48s-11 42-31 48l-19-15v-66z" fill="#E8F3EE" stroke="#183331" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M102 243v43M410 243v43" stroke="#9ABBB0" stroke-width="6" stroke-linecap="round"/>
+  <path d="M226 432h60l11 34h-82z" fill="#0E4938" stroke="#183331" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M256 437v23" stroke="#75FFC5" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="256" cy="447" r="5" fill="#FF536D"/>
 </svg>
