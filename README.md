@@ -19,15 +19,19 @@ Astronaut is an offline-first Android AI workspace. It keeps conversations and i
 
 | Area | Current implementation |
 |---|---|
-| Private chat | Persistent conversations, local inference and encrypted local database |
+| Private chat | Minimal conversation switcher, distinct assistant/user surfaces, local inference and encrypted database |
 | Model library | Local import, HTTPS downloads, SHA-256 verification, signed catalog validation, versioned installs and rollback |
 | Documents | PDF, DOCX and text extraction with bounded processing |
 | Images | OCR and image labels; multimodal image input through compatible LiteRT-LM models |
 | Retrieval | BM25 search with optional ONNX MiniLM embeddings and matching vocabulary |
-| Voice | Android speech recognition and offline TTS voice discovery |
+| Voice | Android speech recognition, readable language selection, local voice quality labels and voice preview |
 | Workspace | Local projects and a SAF-scoped text editor |
 | Collaboration | Sequential review using two distinct local models |
 | Optional training | Separate FastAPI/Celery backend for dataset validation and training job management |
+
+## Personalisation
+
+Choose light or dark appearance, one of five accent colours, concise/balanced/detailed responses, a readable speech language, and an installed offline TTS voice. Voice choices are labelled by language and quality rather than opaque Android engine IDs; selecting one previews it.
 
 ## Runtime support is explicit
 
