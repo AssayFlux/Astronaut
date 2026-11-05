@@ -13,7 +13,7 @@ import java.nio.file.StandardCopyOption
 data class ModelCompatibility(
     val compatible: Boolean,
     val reasons: List<String>,
-    val availableRamMb: Long,
+    val deviceRamMb: Long,
     val availableStorageBytes: Long
 )
 
@@ -29,7 +29,7 @@ class ModelCompatibilityChecker(context: Context) {
         val availableStorage = storage.availableBytes
         if (Build.VERSION.SDK_INT < model.minSdk) reasons += "Requires Android API ${model.minSdk}; this device is API ${Build.VERSION.SDK_INT}."
         if (totalRamMb < model.minRamMb) reasons += "Requires at least ${model.minRamMb} MiB RAM; device reports ${totalRamMb} MiB."
-        if (availableStorage < model.sizeBytes + MIN_INSTALL_HEADROOM_BYTES) {
+        if (availableStorage < (model.sizeBytes * 2L) + MIN_INSTALL_HEADROOM_BYTES) {
             reasons += "Insufficient private storage for download, installation and temporary files."
         }
         if (model.runtime != "litertlm" || model.format != "litertlm") reasons += "This app build does not support the model's runtime or file format."
@@ -63,6 +63,8 @@ class ModelInstallStore(context: Context) {
         require(verifiedSource.isFile && verifiedSource.canRead()) { "Verified model source is missing or unreadable." }
         require(entry.id.matches(Regex("^[a-z0-9][a-z0-9._-]{1,79}$"))) { "Invalid model ID." }
         require(entry.version.matches(Regex("^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"))) { "Invalid model version." }
+        require(entry.fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}\\\\.litertlm$", RegexOption.IGNORE_CASE))) { "Invalid model filename." }
+        require(entry.sha256.matches(Regex("^[A-Fa-f0-9]{64}$"))) { "Invalid model checksum." }
         require(verifiedSource.length() == entry.sizeBytes) { "Downloaded model size does not match the signed catalog." }
         val modelRoot = File(root, entry.id).apply { mkdirs() }
         val versionDir = File(modelRoot, entry.version)
