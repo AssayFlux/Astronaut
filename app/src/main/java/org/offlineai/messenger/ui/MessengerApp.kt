@@ -398,6 +398,8 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       visionPrefs.edit().putString("vision_model_path",next).apply()
       visionModelPath=next
       if(activeModelPath==path){scope.launch{runtime.unload();activeModelPath=null;activeModelName=null;activeModelVision=false;runtimeMessage="Vision setting changed. Reload this model to apply it."}}
+     }, { entry, file ->
+      db.modelDao().add(LocalModelEntity("catalog:"+entry.id+":"+entry.version,entry.name,"application/octet-stream",file.length(),modelPath=file.absolutePath))
      })
     Section.TRAINING->TrainingLabScreen(
      datasetName,datasetReport,datasetStatus,datasetBusy,trainingJob,trainingStatus,trainingBusy,
@@ -437,14 +439,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       }
      }
     )
-    Section.WORKSPACE->WorkspaceScreen(projects,{showNewProject=true},{project->
-     scope.launch{
-      val existing=db.chatDao().latestProjectConversation(project.id)
-      val id=existing?.id?:db.chatDao().addConversation(ConversationEntity(title=project.name,workspaceProjectId=project.id))
-      selectedConversation=id
-      section=Section.CHATS
-     }
-    },{id->scope.launch{db.workspaceDao().delete(id)}})
+    Section.WORKSPACE->DeveloperStudioScreen()
     Section.SETTINGS->SettingsScreen(
      speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,
      {tag->try{
@@ -510,10 +505,13 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }
 }
 
-@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,embeddingReady:Boolean,embeddingStatus:String,onImportEmbeddingModel:()->Unit,onImportEmbeddingVocab:()->Unit,onImport:()->Unit,onDownload:(String,String,String)->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit,visionModelPath:String?,onEnableVision:(String)->Unit){
+@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,embeddingReady:Boolean,embeddingStatus:String,onImportEmbeddingModel:()->Unit,onImportEmbeddingVocab:()->Unit,onImport:()->Unit,onDownload:(String,String,String)->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit,visionModelPath:String?,onEnableVision:(String)->Unit,onCatalogInstalled:(org.offlineai.messenger.features.ModelCatalogEntry,File)->Unit){
+ var showCatalog by remember { mutableStateOf(false) }
  Column(Modifier.fillMaxSize().padding(16.dp)){
   Text("On-device model library",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
   Text("Import a .litertlm model. Model files stay in app-private storage and are not included in the APK.",color=Muted)
+  OutlinedButton(onClick={showCatalog=true},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Verified,null);Spacer(Modifier.width(8.dp));Text("Browse verified model catalog")}
+  if(showCatalog) AlertDialog(onDismissRequest={showCatalog=false},title={Text("Verified model catalog")},text={Column(Modifier.heightIn(max=560.dp).verticalScroll(rememberScrollState())){CatalogLibraryPanel(onCatalogInstalled)}},confirmButton={TextButton(onClick={showCatalog=false}){Text("Close")}})
   Spacer(Modifier.height(14.dp));Button(onClick=onImport,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import .litertlm model")}
   Spacer(Modifier.height(18.dp))
   Text("Semantic document search",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
