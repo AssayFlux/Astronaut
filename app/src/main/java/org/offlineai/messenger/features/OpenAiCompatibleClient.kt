@@ -70,12 +70,12 @@ class OpenAiCompatibleClient(
                 connection.outputStream.use { it.write(body) }
                 val status = connection.responseCode
                 val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-                val response = stream?.use { input ->
+                val response = stream?.bufferedReader(Charsets.UTF_8)?.use { reader ->
                     val output = StringBuilder()
                     val buffer = CharArray(4096)
                     var total = 0
                     while (true) {
-                        val count = input.bufferedReader(Charsets.UTF_8).read(buffer)
+                        val count = reader.read(buffer)
                         if (count < 0) break
                         total += count
                         if (total > MAX_RESPONSE_CHARS) throw IOException("Online AI response exceeded the 1 MiB limit.")
