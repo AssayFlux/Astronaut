@@ -31,7 +31,7 @@ class PersistentHybridRag(
             val vector = embedder.embed(chunk.text)
             require(vector.size == embedder.dimensions) { "Embedding model returned an unexpected vector size." }
             KnowledgeChunkEntity(
-                id = stableId(embedder.modelId, source, index),
+                id = stableId(embedder.modelId, scopeId, source, index),
                 source = source,
                 chunkIndex = index,
                 pageNumber = chunk.pageNumber,
@@ -138,8 +138,8 @@ class PersistentHybridRag(
         return FloatArray(bytes.size / Float.SIZE_BYTES) { buffer.float }
     }
 
-    private fun stableId(modelId: String, source: String, index: Int): String {
-        val input = "$modelId\u0000$source\u0000$index".toByteArray(Charsets.UTF_8)
+    private fun stableId(modelId: String, scope: String, source: String, index: Int): String {
+        val input = "$modelId\u0000$scope\u0000$source\u0000$index".toByteArray(Charsets.UTF_8)
         return MessageDigest.getInstance("SHA-256").digest(input).joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 }
