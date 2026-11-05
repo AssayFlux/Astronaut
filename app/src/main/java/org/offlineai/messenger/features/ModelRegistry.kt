@@ -7,6 +7,8 @@ import android.os.StatFs
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 data class ModelCompatibility(
     val compatible: Boolean,
@@ -65,9 +67,17 @@ class ModelInstallStore(context: Context) {
         val modelRoot = File(root, entry.id).apply { mkdirs() }
         val versionDir = File(modelRoot, entry.version)
         val target = File(versionDir, entry.fileName)
-        if (target.isFile && sha256(target).equals(entry.sha256, true)) {
+        if (versionDir.exists()) {
+            val existingMetadata = File(versionDir, "install.json")
+            require(existingMetadata.isFile && target.isFile) {
+                "This model version already exists but is incomplete; remove the damaged version before reinstalling."
+            }
+            val record = JSONObject(existingMetadata.readText())
+            require(record.optString("sha256").equals(entry.sha256, true) && sha256(target).equals(entry.sha256, true)) {
+                "Model version ${entry.version} is immutable and already contains different bytes."
+            }
             activate(entry, target, modelRoot)
-            return InstalledModelVersion(entry.id, entry.version, target, entry.sha256.lowercase(), target.length(), target.lastModified(), true)
+            return InstalledModelVersion(entry.id, entry.version, target, entry.sha256.lowercase(), target.length(), record.optLong("installed_at"), true)
         }
         val staging = File(modelRoot, ".${entry.version}.installing")
         if (staging.exists()) staging.deleteRecursively()
@@ -82,12 +92,11 @@ class ModelInstallStore(context: Context) {
             require(stagedFile.length() == entry.sizeBytes) { "Model size changed during installation." }
             val metadata = JSONObject()
                 .put("model_id", entry.id).put("name", entry.name).put("publisher", entry.publisher)
-                .put("version", entry.version).put("sha256", actual).put("size_bytes", stagedFile.length())
+                .put("version", entry.version).put("file_name", entry.fileName)
+                .put("sha256", actual).put("size_bytes", stagedFile.length())
                 .put("license", entry.license).put("license_url", entry.licenseUrl)
-                .put("catalog_payload_sha256", "")
                 .put("installed_at", System.currentTimeMillis())
             File(staging, "install.json").writeText(metadata.toString(2))
-            if (versionDir.exists()) versionDir.deleteRecursively()
             check(staging.renameTo(versionDir)) { "Could not atomically publish the installed model version." }
             val installedFile = File(versionDir, entry.fileName)
             activate(entry, installedFile, modelRoot)
@@ -156,8 +165,7 @@ class ModelInstallStore(context: Context) {
         val temp = File(modelRoot, "active.json.tmp")
         temp.writeText(JSONObject().put("active_version", active).put("previous_version", previous ?: "").toString())
         val target = File(modelRoot, "active.json")
-        if (target.exists()) check(target.delete()) { "Could not replace active model pointer." }
-        check(temp.renameTo(target)) { "Could not atomically update active model pointer." }
+        Files.move(temp.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
     }
 
     private fun safeModelRoot(modelId: String): File {
