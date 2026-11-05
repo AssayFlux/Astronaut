@@ -1,32 +1,51 @@
 # Astronaut Training API
 
-Self-hosted API for JSONL dataset registration and optional LoRA/QLoRA training. The API is a control plane; the Celery worker performs GPU training on a separate machine.
+Self-hosted control plane for local JSONL dataset registration and optional GPU LoRA/QLoRA training. The API is not a hosted service: run it on your own workstation/server. The Celery worker performs GPU training on a separate machine.
 
 ## API development
 
 ```bash
+cd backend
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
+export ASTRONAUT_API_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export ASTRONAUT_DATA_DIR="$PWD/astronaut-data"
+mkdir -p "$ASTRONAUT_DATA_DIR/models"
 uvicorn astronaut_api.main:app --host 127.0.0.1 --port 8080
 ```
 
+Place an already-downloaded Hugging Face model directory inside `$ASTRONAUT_DATA_DIR/models`. The API rejects model paths outside that directory and the trainer uses `local_files_only=True`; it does not fetch arbitrary models from the internet.
+
+Authenticated routes require the `X-API-Key` header. `/health` remains public. Never expose the API publicly without TLS, firewalling and a strong API key. Do not expose Redis or the Celery worker to the public internet.
+
 ## GPU worker setup
 
-Use a Linux host with a compatible NVIDIA CUDA stack and install the optional ML dependencies:
+Use a Linux host with a compatible NVIDIA CUDA stack. Install optional ML dependencies:
 
 ```bash
 pip install -r requirements-training.txt
 export ASTRONAUT_DATA_DIR=/srv/astronaut-data
+export ASTRONAUT_MODELS_DIR=/srv/astronaut-data/models
 export ASTRONAUT_REDIS_URL=redis://127.0.0.1:6379/0
 export ASTRONAUT_ENABLE_TRAINING=1
-celery -A astronaut_api.worker.celery_app worker --loglevel=INFO
+celery -A astronaut_api.worker.celery_app worker --loglevel=INFO --concurrency=1
 ```
 
-Start Redis and the API with the same data directory and environment variables. Both processes must see the same dataset and SQLite paths; for multiple workers or production, replace SQLite with PostgreSQL and use shared object storage.
+Start Redis and the API with the same data directory, model directory and environment variables. Both processes must see the same dataset and SQLite paths. For multi-worker/production use, replace SQLite with PostgreSQL and use shared object storage.
 
-The first trainer supports JSONL `text`, `messages`, and `prompt` records and PEFT LoRA/QLoRA adapters. It requires CUDA and uses common Llama-style `q_proj`/`v_proj` target modules; model families with different layer names need configuration changes. It saves an adapter and manifest, not a merged standalone model.
+## Training pipeline
 
-## Security
+- JSONL records may use `text`, `messages`, or `prompt`/ `completion`.
+- The worker supports PEFT LoRA and QLoRA adapters and requires a CUDA GPU.
+- The first trainer targets Llama-style `q_proj` and `v_proj` modules. Other architectures need an explicit target-module configuration.
+- The API exposes dataset upload/list, training job create/list/status/cancel, capability checks and completed adapter ZIP download.
+- Progress is written to SQLite from Hugging Face Trainer callbacks.
+- Artifacts are PEFT adapter weights plus a manifest. They are **not** directly importable `.litertlm` files; conversion/merge/export for the Android runtime is a separate step.
 
-Bind the development API to localhost. Before remote deployment, add authentication, TLS, durable database migrations, worker isolation, resource quotas, audit logs, dataset retention controls, signed artifact manifests and per-user authorization. Do not expose Redis or the Celery worker to the public internet.
+## Security and operations
+
+- API key authentication is mandatory for all dataset and job routes.
+- Base models must be local directories under `ASTRONAUT_MODELS_DIR`; the trainer is offline with respect to model downloads.
+- Uploads are capped at 512 MiB; app-side JSONL preparation is capped at 20 MiB.
+- Run one GPU worker per device initially. Add quotas, TLS, audit logging, retention/cleanup, PostgreSQL, object storage and per-user authorization before multi-user deployment.
