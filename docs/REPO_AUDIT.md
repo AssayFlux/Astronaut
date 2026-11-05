@@ -1,19 +1,59 @@
 # Repository audit — 2026-11-05
 
-## Findings
-- PR #3 merged successfully; that only confirms GitHub accepted the source changes, not that Android compiled or tests passed.
-- The repository had no discoverable .github/workflows/android.yml, so there was no Android CI run associated with the merge commit.
-- The added dataset inspector uses org.json. JVM unit tests need a real org.json implementation rather than Android's mockable platform stubs; add org.json as a test dependency.
-- Text and DOCX readers previously called readText() before take(), which did not bound memory consumption. Image decoding also used full-resolution bitmaps. These paths now use bounded reads and sampled image decoding.
-- LocalRagIndex now validates chunk/overlap configuration and retrieval limits.
-- The app's Compose screen still only exposes Chats, Models, Workspace and Settings. New OCR/RAG/audio/download/collaboration/training services are not wired into the chat UI.
-- Existing chat attachment handling stores a URI/name reference; it does not extract attachment content or add it to model prompts.
-- The current app instantiates one LiteRT-LM runtime. There is no second provider registered in the application, so actual peer collaboration cannot run.
-- Model downloads have no catalogue UI or trusted signed catalogue, and no download-to-checksum-to-import workflow is connected.
-- Speech services have no runtime permission/UI flow. Offline recognition is dependent on installed device speech services.
-- Dataset inspection is not training. No fine-tuning executor or dashboard exists.
-- DatabaseProvider uses fallbackToDestructiveMigration; schema upgrades can delete user data. This must be replaced with explicit Room migrations before production.
-- No wrapper script is present at repository root; CI uses a pinned Gradle installation instead.
+This audit supersedes earlier snapshots in this file. It reflects the current `main` tree inspected on 2026-11-05 and the Android/backend CI workflows. It distinguishes code presence from verified runtime behavior.
 
-## Verification status
-This audit is based on source inspection and GitHub workflow metadata. No successful Gradle build, test report, APK artifact, or physical-device test has been observed. Do not mark the app production-ready until CI and device tests pass.
+## Repository and release identity
+
+- Android application ID: `org.astronaut.agi`.
+- Android Gradle namespace: `org.offlineai.messenger` (internal Kotlin package namespace; it does not change the installed application ID).
+- Intended initial product release: `v0.1.0`.
+- Android `versionCode` is monotonic. It is advanced to 7 while setting `versionName` to `0.1.0`, so users with the previously built code 6 APK can install this corrected version as an upgrade. Do not reset versionCode to 1 after distributing code 6.
+- No model weights are bundled in the APK.
+- The Gradle wrapper scripts are not committed. GitHub Actions installs Gradle 8.13 explicitly; local builds need a compatible Gradle installation.
+
+## Implemented Android capabilities
+
+| Area | Current implementation | Important boundary |
+|---|---|---|
+| UI | Jetpack Compose screens for chats, AI Hub, models, training, workspace and settings | Not a full IDE |
+| Chat | Room persistence and conversation-scoped history | Verify upgrade/restore on physical devices |
+| Local database | SQLCipher with Keystore-managed key material and explicit migrations | Device migration, recovery and backup behavior still require testing |
+| Inference | LiteRT-LM runtime for imported local `.litertlm` models | Model format/runtime compatibility and memory limits require device testing |
+| Model acquisition | Import flow and HTTPS download with SHA-256 verification | No signed curated catalog; user must trust the URL/checksum source |
+| Documents | PDF page OCR, DOCX extraction, bounded text reads | OCR does not recover all layouts/tables reliably |
+| Images | ML Kit OCR and image labels | Not image Q&A, captioning, chart/diagram reasoning or general vision-language understanding |
+| Retrieval | Local BM25 lexical ranking over stored attachment text, with source/chunk labels | Not embedding/vector semantic retrieval; index is rebuilt from saved attachment text for a request |
+| Voice | Android speech-recognition and TTS integration | Offline support depends on device speech services and installed offline language/voice packs |
+| Collaboration | Sequential two-model review and coordinator synthesis | Requires multiple compatible imported models; not parallel autonomous agents |
+| Training UI | Dataset inspection and training API client/status UI | Requires separately deployed backend |
+| Workspace | Project records and project-scoped assistant conversations | No integrated source editor, Git client, shell or build/test agent |
+
+## Optional training backend
+
+- FastAPI control plane with API-key authentication for dataset and job endpoints.
+- JSONL upload validation, dataset hashes, job records, job status/cancellation and artifact download.
+- Optional Celery/Redis worker and CUDA-only PEFT LoRA/QLoRA training code path.
+- The first trainer hardcodes Llama-style `q_proj` and `v_proj` target modules; other model families require explicit support.
+- Training output is a PEFT adapter plus manifest. It is not a LiteRT-LM model and cannot be imported directly into the Android app.
+- The backend is self-hosted and is not part of the Android APK.
+
+## Build and test evidence
+
+- Android CI workflow runs JVM unit tests, debug APK assembly and release-variant assembly; it uploads debug and unsigned release APK artifacts.
+- Backend CI runs pytest.
+- A successful GitHub Actions build proves compilation and the tests that ran; it does not prove offline inference, speech, migration, camera/OCR quality, thermal behavior or low-memory stability on a phone.
+- Production signing requires the owner's keystore and GitHub Actions secrets.
+
+## Outstanding engineering work
+
+1. Semantic RAG: local embedding model, persistent vector index, hybrid retrieval, chunk metadata and robust citations.
+2. Full vision-language support: compatible local VLM runtime/model path, image-question prompt integration, image resizing/token budgeting and device-memory safeguards.
+3. Offline voice independence: managed ASR/TTS model assets and explicit offline-engine availability checks instead of relying solely on system speech services.
+4. Model ecosystem: signed catalog, provenance, runtime compatibility metadata, model license display, safe updates and rollback.
+5. Training-to-mobile pipeline: architecture-aware LoRA targets, evaluation, adapter merge/conversion, quantization and validated LiteRT-LM export.
+6. Developer Studio: project file browser/editor, explicit user-approved writes, Git status/diff/commit, and controlled build/test execution.
+7. Production readiness: instrumentation tests, migration/restore tests, security/privacy review, dependency/license review, crash/performance monitoring and a physical-device matrix.
+
+## Audit caveats
+
+This is a source and CI configuration audit, not a formal penetration test or a certification of runtime behavior. Treat the boundaries above as release blockers where they affect the intended product promise. Update this file when an implementation and its tests are actually merged; do not mark planned features as complete.
