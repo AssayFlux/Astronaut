@@ -22,13 +22,14 @@ import kotlin.math.min
 class OfflineDocumentReader(private val context: Context) {
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
 
-    suspend fun read(uri: Uri, mimeType: String?, maxPdfPages: Int = 40): String = withContext(Dispatchers.IO) {
-        val name = uri.lastPathSegment.orEmpty().lowercase(Locale.ROOT)
+    suspend fun read(uri: Uri, mimeType: String?, maxPdfPages: Int = 40, displayName: String? = null): String = withContext(Dispatchers.IO) {
+        val name = (displayName ?: uri.lastPathSegment).orEmpty().lowercase(Locale.ROOT)
         when {
             mimeType == "application/pdf" || name.endsWith(".pdf") -> readPdf(uri, maxPdfPages)
             mimeType?.startsWith("image/") == true -> readImage(uri)
             name.endsWith(".docx") || mimeType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> readDocx(uri)
-            else -> readText(uri)
+            mimeType?.startsWith("text/") == true || listOf(".txt", ".md", ".csv", ".json", ".xml", ".log").any(name::endsWith) -> readText(uri)
+            else -> error("Unsupported attachment type. Choose PDF, image, DOCX, or a text file.")
         }.also { require(it.isNotBlank()) { "No readable text was found in this document." } }
     }
 
@@ -143,8 +144,11 @@ class LocalRagIndex(private val maxChunkChars: Int = 900, private val overlap: I
         }.filter { it.score > 0 }.sortedByDescending { it.score }.take(limit)
     }
 
-    @Synchronized fun contextFor(query: String, limit: Int = 5): String =
-        search(query, limit).joinToString("\n\n") { "[${it.chunk.source} · chunk ${it.chunk.index + 1}]\n${it.chunk.text}" }
+    @Synchronized fun contextFor(query: String, limit: Int = 5): String {
+        val matches = search(query, limit)
+        val selected = if (matches.isNotEmpty()) matches else chunks.take(limit).map { RetrievedChunk(it, 0.0) }
+        return selected.joinToString("\n\n") { "[${it.chunk.source} · chunk ${it.chunk.index + 1}]\n${it.chunk.text}" }
+    }
 
     @Synchronized fun clear() = chunks.clear()
     @Synchronized fun size() = chunks.size
