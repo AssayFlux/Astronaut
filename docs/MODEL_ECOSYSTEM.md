@@ -42,7 +42,11 @@ The catalog payload schema version is 1:
 
 The parser verifies the envelope signature before parsing any catalog records, limits envelope and payload sizes, rejects duplicate IDs, non-HTTPS download/license URLs, invalid checksums, unsafe filenames, unsupported runtime/format pairs, artifacts above 15 GB and invalid device requirements. Accepted format/runtime pairs currently include LiteRT-LM, GGUF/llama.cpp, ONNX/onnx-runtime-embeddings, TFLite/LiteRT, diffusion bundles/MNN, Whisper/whisper.cpp and Sherpa-ONNX. Acceptance means the catalog can safely describe and install the artifact; it does not mean every listed runtime is bundled. `Ed25519CatalogVerifier` takes an X.509-encoded Ed25519 public key. The application/release owner must provision a publisher key through a trusted release configuration before treating any remote catalog as trusted. No publisher key or third-party model listing is fabricated or embedded by this change.
 
-## Publisher key lifecycle\n\nThe application accepts one pinned Ed25519 X.509 public key per build. Keep the matching private key outside the app and repository. The current schema does not support multiple key IDs, automatic rotation, revocation lists or transparency logs. For key rotation or compromise, ship an app update with a new pinned public key; publish model revocations in a newly signed catalog. See [SECURITY_PRIVACY.md](SECURITY_PRIVACY.md) for the operational checklist.\n\n## Compatibility and installation
+## Publisher key lifecycle
+
+The application accepts one pinned Ed25519 X.509 public key per build. Keep the matching private key outside the app and repository. The current schema does not support multiple key IDs, automatic rotation, revocation lists or transparency logs. For key rotation or compromise, ship an app update with a new pinned public key; publish model revocations in a newly signed catalog. See [SECURITY_PRIVACY.md](SECURITY_PRIVACY.md) for the operational checklist.
+
+## Compatibility and installation
 
 - `ModelCompatibilityChecker` compares Android API level, physical RAM and free private storage. It separately reports whether the runtime is bundled, so an otherwise downloadable GGUF/diffusion/Whisper artifact can be installed without being falsely marked runnable.
 - `ModelInstallStore` copies only checksum-matching files into app-private version directories.
