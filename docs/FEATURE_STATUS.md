@@ -13,7 +13,7 @@ This file distinguishes implemented code from behavior that still requires hardw
 | PDF, DOCX, text and image attachment extraction | Implemented | OCR accuracy and large-file behavior require device tests |
 | Image OCR and ML Kit labels plus LiteRT-LM multimodal image input | Implemented code path | Requires a user-designated compatible multimodal .litertlm model; physical-device vision validation remains outstanding |
 | Local attachment retrieval | BM25 fallback plus optional ONNX WordPiece embeddings, hybrid cosine/BM25 ranking, encrypted persistent chunks and page labels | Requires a compatible user-imported ONNX embedding model + matching vocab; model compatibility and quality need device validation |
-| Offline speech input and TTS wrappers/UI | Implemented | Requires Android 12+ on-device recognizer and installed offline language/TTS voices |
+| Offline speech input/output, language-pack discovery/download controls (Android 13+), and offline TTS voice selection | Implemented code path | Platform speech provider and local packs vary by OEM; physical airplane-mode and voice-quality validation remain outstanding |
 | SHA-256 verified HTTPS model download | Implemented | User must obtain checksum from a trusted publisher; no signed curated catalog |
 | Sequential two-model review | Implemented | Requires two compatible imported models; sequential execution, not parallel agents |
 | Dataset validation and training API client/UI | Implemented | Training API must be configured and reachable |
@@ -42,7 +42,7 @@ This file distinguishes implemented code from behavior that still requires hardw
 
 1. Validate the new ONNX semantic RAG path with a known MiniLM-compatible model on physical devices; add more tokenizer/model export variants and quality benchmarks.
 2. Validate the LiteRT-LM vision path with supported multimodal model artifacts; benchmark image Q&A for charts, diagrams, screenshots and photographs on target devices.
-3. Broader offline ASR/TTS model management beyond Android system speech services.
+3. Validate platform-managed offline ASR language packs and TTS voice selection on target devices; consider bundled independent ASR/TTS runtimes only if device coverage requires them.
 4. Signed model catalog with compatibility metadata, provenance and automatic update policy.
 5. Adapter conversion/export into a runtime-compatible LiteRT-LM artifact.
 6. Full Developer Studio: constrained project file browser/editor, Git operations, build/test orchestration and explicit user approval for writes/commands.
