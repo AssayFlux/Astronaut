@@ -9,6 +9,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -683,7 +685,7 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
 ){
  var languageDraft by remember(languageTag){mutableStateOf(languageTag)}
  var voiceMenu by remember{mutableStateOf(false)}
- Column(Modifier.fillMaxSize().padding(16.dp)){
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)){
   Text("Privacy & device",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
   InfoCard("Offline-first","Chat records and model files are stored on this device. Model generation runs locally.")
   InfoCard("No silent uploads","This app does not upload chats or connect to an account or server.")
@@ -695,7 +697,7 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
   Button(onClick={onLanguageChange(languageDraft)},modifier=Modifier.fillMaxWidth()){Text("Apply speech language")}
   Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
    OutlinedButton(onClick=onCheckLanguages,modifier=Modifier.weight(1f)){Text("Check packs")}
-   Button(onClick=onDownloadLanguage,modifier=Modifier.weight(1f),enabled=recognition.downloadable.isNotEmpty()||recognition.pending.isNotEmpty()){Text("Download pack")}
+   Button(onClick=onDownloadLanguage,modifier=Modifier.weight(1f),enabled=recognition.downloadable.isNotEmpty()){Text("Download pack")}
   }
   if(recognition.installed.isNotEmpty())Text("Installed offline ASR: "+recognition.installed.joinToString(),color=Green,style=MaterialTheme.typography.bodySmall)
   if(recognition.downloadable.isNotEmpty())Text("Available to download: "+recognition.downloadable.joinToString(),color=Muted,style=MaterialTheme.typography.bodySmall)
