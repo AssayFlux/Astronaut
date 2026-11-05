@@ -25,6 +25,8 @@ jobs:
         run: chmod +x ./gradlew
       - name: Run Android unit tests
         run: ./gradlew --no-daemon :app:testDebugUnitTest --stacktrace
+      - name: Run Android lint
+        run: ./gradlew --no-daemon :app:lintDebug --stacktrace
       - name: Assemble debug APK
         run: ./gradlew --no-daemon :app:assembleDebug --stacktrace
       - name: Run Android instrumentation smoke tests
