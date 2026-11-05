@@ -6,7 +6,7 @@ data class ConversationEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,val t
 @Entity(tableName="messages",indices=[Index("conversationId")])
 data class MessageEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,val conversationId:Long,val body:String,val role:String,val createdAt:Long=System.currentTimeMillis(),val status:String="complete",val attachmentUri:String?=null,val attachmentName:String?=null)
 @Entity(tableName="local_models")
-data class LocalModelEntity(@PrimaryKey val uri:String,val displayName:String,val mimeType:String?,val sizeBytes:Long,val importedAt:Long=System.currentTimeMillis(),val runtimeStatus:String="not_connected")
+data class LocalModelEntity(@PrimaryKey val uri:String,val displayName:String,val mimeType:String?,val sizeBytes:Long,val importedAt:Long=System.currentTimeMillis(),val runtimeStatus:String="not_connected",val modelPath:String?=null)
 @Entity(tableName="workspace_projects")
 data class WorkspaceProjectEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,val name:String,val description:String="",val createdAt:Long=System.currentTimeMillis(),val updatedAt:Long=System.currentTimeMillis())
 @Dao interface ChatDao {
@@ -28,5 +28,5 @@ data class WorkspaceProjectEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,v
  @Insert suspend fun add(project:WorkspaceProjectEntity):Long
  @Query("DELETE FROM workspace_projects WHERE id=:id") suspend fun delete(id:Long)
 }
-@Database(entities=[ConversationEntity::class,MessageEntity::class,LocalModelEntity::class,WorkspaceProjectEntity::class],version=2,exportSchema=false)
+@Database(entities=[ConversationEntity::class,MessageEntity::class,LocalModelEntity::class,WorkspaceProjectEntity::class],version=3,exportSchema=false)
 abstract class AppDatabase:RoomDatabase(){ abstract fun chatDao():ChatDao; abstract fun modelDao():ModelDao; abstract fun workspaceDao():WorkspaceDao }

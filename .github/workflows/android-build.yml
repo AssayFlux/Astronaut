@@ -14,11 +14,12 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
-      - uses: android-actions/setup-android@v3
-      - name: Install Android SDK
-        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Run unit tests and assemble APK
+          gradle-version: "8.11.1"
+      - name: Accept Android SDK licences
+        run: yes | sdkmanager --licenses || true
+      - name: Install Android SDK packages
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Build debug APK and run unit tests
         run: gradle :app:testDebugUnitTest :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         if: success()
