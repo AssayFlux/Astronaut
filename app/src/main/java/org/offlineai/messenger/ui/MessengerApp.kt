@@ -2,6 +2,8 @@ package org.offlineai.messenger.ui
 
 import android.Manifest
 import android.content.Context
+import android.content.ComponentCallbacks2
+import android.content.res.Configuration
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -86,6 +88,26 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var activeModelName by remember{mutableStateOf<String?>(null)}
  var restoringActiveModel by remember{mutableStateOf(false)}
  var runtimeMessage by remember{mutableStateOf("Import a .litertlm model to start offline AI chat.")}
+ DisposableEffect(context,runtime){
+  val memoryCallbacks=object:ComponentCallbacks2{
+   override fun onConfigurationChanged(newConfig:Configuration) = Unit
+   override fun onLowMemory(){onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL)}
+   override fun onTrimMemory(level:Int){
+    if(level>=ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW&&activeModelPath!=null){
+     scope.launch{
+      runCatching{runtime.unload()}
+      activeModelPrefs.edit().remove("path").apply()
+      activeModelPath=null
+      activeModelName=null
+      runtimeMessage="Model unloaded to protect the app during memory pressure. Reload it from Models when memory is available."
+     }
+    }
+   }
+  }
+  context.registerComponentCallbacks(memoryCallbacks)
+  onDispose{context.unregisterComponentCallbacks(memoryCallbacks)}
+ }
+
  val personalizationPrefs=remember(context){context.getSharedPreferences("astronaut_personalization",Context.MODE_PRIVATE)}
  var responseStyle by remember{mutableStateOf(personalizationPrefs.getString("response_style","balanced")?:"balanced")}
  var darkAppearance by remember{mutableStateOf(personalizationPrefs.getBoolean("dark_appearance",false))}
