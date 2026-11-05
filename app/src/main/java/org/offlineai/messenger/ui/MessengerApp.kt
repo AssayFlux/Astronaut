@@ -40,6 +40,7 @@ import org.offlineai.messenger.data.*
 import org.offlineai.messenger.features.OfflineDocumentReader
 import org.offlineai.messenger.features.LocalRagIndex
 import org.offlineai.messenger.features.OfflineVoiceController
+import org.offlineai.messenger.features.VerifiedModelDownloader
 import java.io.File
 import java.util.UUID
 
@@ -72,6 +73,9 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var collaborationPrompt by remember{mutableStateOf("")}
  var collaborationStatus by remember{mutableStateOf("Import two distinct compatible .litertlm models to enable collaboration.")}
  var collaborating by remember{mutableStateOf(false)}
+ var downloadingModel by remember{mutableStateOf(false)}
+ var downloadProgress by remember{mutableFloatStateOf(0f)}
+ var downloadStatus by remember{mutableStateOf("")}
  val conversations by db.chatDao().conversations().collectAsState(initial=emptyList())
  val models by db.modelDao().models().collectAsState(initial=emptyList())
  val projects by db.workspaceDao().projects().collectAsState(initial=emptyList())
@@ -207,7 +211,28 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       }
      }
     }
-    Section.MODELS->ModelsScreen(models,activeModelPath,activeModelName,runtimeMessage,loadingModel,{modelPicker.launch(arrayOf("*/*"))},{model->
+    Section.MODELS->ModelsScreen(
+     models,activeModelPath,activeModelName,runtimeMessage,loadingModel,downloadingModel,downloadProgress,downloadStatus,
+     {modelPicker.launch(arrayOf("*/*"))},
+     {url,checksum,name->
+      if(!downloadingModel){
+       downloadingModel=true;downloadProgress=0f;downloadStatus="Connecting to HTTPS model host…"
+       scope.launch{
+        try{
+         val result=VerifiedModelDownloader(context).download(url,checksum,name){downloaded,total->
+          downloadProgress=if(total!=null&&total>0)(downloaded.toFloat()/total).coerceIn(0f,1f)else 0f
+          downloadStatus=if(total!=null)"Downloaded "+formatBytes(downloaded)+" / "+formatBytes(total)else "Downloaded "+formatBytes(downloaded)
+         }
+         db.modelDao().add(LocalModelEntity("sha256:"+result.sha256,name,"application/octet-stream",result.bytes,modelPath=result.file.absolutePath))
+         downloadStatus="Verified SHA-256 "+result.sha256.take(16)+"…"
+         runtimeMessage="Downloaded and verified "+name+". Tap Load model to activate it."
+        }catch(error:Throwable){downloadStatus="Download failed: "+(error.message?:error.javaClass.simpleName)}
+        finally{downloadingModel=false}
+       }
+      }
+     },
+     {model->
+
      if(model.modelPath!=null){loadingModel=true;scope.launch{
       try{runtime.load(model.modelPath);activeModelPath=model.modelPath;activeModelName=model.displayName;runtimeMessage="Loaded "+model.displayName+". Chat is ready offline."}
       catch(error:Throwable){activeModelPath=null;activeModelName=null;runtimeMessage="Could not load model: "+(error.message?:error.javaClass.simpleName)}
@@ -265,11 +290,23 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }
 }
 
-@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,onImport:()->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit){
+@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,onImport:()->Unit,onDownload:(String,String,String)->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit){
  Column(Modifier.fillMaxSize().padding(16.dp)){
   Text("On-device model library",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
   Text("Import a .litertlm model. Model files stay in app-private storage and are not included in the APK.",color=Muted)
-  Spacer(Modifier.height(14.dp));Button(onClick=onImport,modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import .litertlm model")}
+  Spacer(Modifier.height(14.dp));Button(onClick=onImport,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import .litertlm model")}
+  var downloadUrl by remember{mutableStateOf("")}
+  var downloadSha by remember{mutableStateOf("")}
+  var downloadName by remember{mutableStateOf("model.litertlm")}
+  Spacer(Modifier.height(16.dp))
+  Text("Download and verify",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+  Text("Paste an HTTPS model URL and the SHA-256 published by its source. Downloads are rejected if the checksum does not match.",color=Muted,style=MaterialTheme.typography.bodySmall)
+  OutlinedTextField(downloadUrl,{downloadUrl=it},modifier=Modifier.fillMaxWidth(),label={Text("HTTPS download URL")},singleLine=true,enabled=!downloading)
+  OutlinedTextField(downloadSha,{downloadSha=it},modifier=Modifier.fillMaxWidth(),label={Text("SHA-256 checksum (64 hex characters)")},singleLine=true,enabled=!downloading)
+  OutlinedTextField(downloadName,{downloadName=it},modifier=Modifier.fillMaxWidth(),label={Text("Filename (.litertlm)")},singleLine=true,enabled=!downloading)
+  Button(onClick={onDownload(downloadUrl.trim(),downloadSha.trim(),downloadName.trim())},modifier=Modifier.fillMaxWidth(),enabled=!downloading&&downloadUrl.startsWith("https://")&&downloadSha.matches(Regex("[A-Fa-f0-9]{64}"))&&downloadName.endsWith(".litertlm",true)){if(downloading)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)else Icon(Icons.Default.Download,null);Spacer(Modifier.width(8.dp));Text(if(downloading)"Downloading…" else "Download and verify")}
+  if(downloading&&downloadProgress>0f)LinearProgressIndicator(progress=downloadProgress,modifier=Modifier.fillMaxWidth())
+  if(downloadStatus.isNotBlank())Text(downloadStatus,color=Green,style=MaterialTheme.typography.bodySmall)
   Spacer(Modifier.height(10.dp));Text(status,color=Green,style=MaterialTheme.typography.bodySmall)
   if(loading)LinearProgressIndicator(Modifier.fillMaxWidth())
   Spacer(Modifier.height(10.dp))
