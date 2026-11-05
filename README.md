@@ -14,51 +14,68 @@ Astronaut is an Android-first offline AI application. The Android app performs l
 - SQLCipher-backed encrypted database with Android Keystore-managed key material and explicit legacy database migrations.
 - Import, store, load and unload compatible `.litertlm` models in app-private storage.
 - Local text generation through LiteRT-LM.
-- Attachment ingestion for PDF (page-rendered OCR), DOCX, UTF-8 text and images.
-- On-device ML Kit OCR and image-label classification. Image labels are not open-ended visual question answering.
-- Local attachment retrieval with BM25-style lexical ranking and source/chunk labels. This is not embedding/vector semantic search.
-- Offline speech recognition through Android's on-device recognizer (Android 12+ and installed offline language pack) and locally installed TTS voices.
-- HTTPS model download with publisher-supplied SHA-256 verification, bounded redirects and file-size limits.
-- Sequential local multi-model review when at least two compatible local models are imported. Models run one after another to reduce peak RAM use.
+- Attachment ingestion for PDF, DOCX, UTF-8 text and images.
+- On-device ML Kit OCR and image labels, with a LiteRT-LM multimodal image-input path for compatible imported models.
+- Local attachment retrieval with encrypted chunks, lexical BM25 ranking and optional ONNX WordPiece embeddings/hybrid ranking when a compatible embedding model and vocabulary are supplied.
+- Offline speech recognition through Android's on-device recognizer and locally installed TTS voices; availability depends on device services and offline language packs.
+- HTTPS model download with publisher-supplied SHA-256 verification, bounded redirects and resumable transfers when the server supports HTTP Range.
+- Sequential local multi-model review when at least two compatible local models are imported.
 - Dataset JSONL validation and a training screen for connecting to the optional training API.
-- Local project/workspace records and project-scoped assistant conversations.
+- SAF-scoped Developer Studio for browsing a user-selected project folder and editing bounded UTF-8 text files.
 
 ## Important limitations
 
-- No language model is bundled in the APK. Import a compatible `.litertlm` model before using local chat.
-- The app's image feature provides OCR and object/category labels, not visual question answering, image caption generation or chart reasoning.
-- Retrieval is offline lexical BM25 ranking over stored attachment text, not neural embedding search.
-- Offline voice depends on the Android device's on-device speech service and downloaded offline voice/language packs.
-- Collaboration requires two distinct compatible local models and is sequential, not parallel autonomous agents.
-- The training backend is an optional self-hosted GPU service. It supports LoRA/QLoRA adapter training on a configured CUDA worker; exported PEFT adapters are not directly importable LiteRT-LM models and require a separate conversion/export step.
-- Workspace support is not a full IDE: there is no integrated source editor, arbitrary shell, Git client or autonomous Android build environment inside the phone app.
-- CI and unit tests cannot replace physical-device testing, especially for LiteRT model compatibility, offline speech availability, memory pressure and SQLCipher migration behavior.
+- No language model or embedding model is bundled in the APK. Import compatible model artifacts before using local chat or semantic retrieval.
+- Multimodal image understanding requires a compatible user-imported LiteRT-LM model; OCR and image labels are separate on-device features.
+- Offline voice depends on Android's speech provider and downloaded offline language/voice packs; OEM behavior varies.
+- Multi-model review is sequential, not parallel autonomous agents.
+- The optional training backend is a self-hosted GPU service. PEFT adapters are not directly importable LiteRT-LM models and need a separately selected/validated conversion tool.
+- Developer Studio is not a full IDE: integrated Git operations, arbitrary shell execution and remote build/test orchestration are not implemented.
+- Unit tests do not replace physical-device testing for model compatibility, offline speech, memory pressure, image understanding or SQLCipher migration behavior.
 
-## Build the APK
+## Build the debug APK locally
 
-### Local build
+### Prerequisites
 
-Requirements: JDK 17, Android SDK platform 36 and build-tools 36.0.0, and Gradle 8.13.
+- JDK 17
+- Android SDK Platform 36
+- Android SDK Build-Tools 36.0.0
+- Gradle 8.13
+- Android SDK licenses accepted
+
+The repository currently contains `gradle-wrapper.properties` but does **not** contain the Gradle wrapper scripts or wrapper JAR. Therefore use an installed Gradle 8.13 command (or import the project into Android Studio with a compatible Gradle installation); `./gradlew` will not work until a complete wrapper is added.
+
+Check your Java and Gradle versions:
+
+```bash
+java -version
+gradle --version
+```
+
+From the repository root, run:
 
 ```bash
 gradle --no-daemon :app:testDebugUnitTest
 gradle --no-daemon :app:assembleDebug
 ```
 
-Debug APK:
+The APK is created at:
 
-`app/build/outputs/apk/debug/app-debug.apk`
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
 
-### Build through GitHub Actions
+To install on a connected Android device with USB debugging enabled:
 
-1. Open the repository's **Actions** tab.
-2. Select **Android build**.
-3. Choose **Run workflow** and select the branch.
-4. Wait for the **Unit tests and APKs** job to finish successfully.
-5. Open the run's **Artifacts** section and download `astronaut-debug-apk`.
-6. Extract the ZIP; install `app-debug.apk` on your Android device.
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
-The workflow runs unit tests, assembles the debug APK and validates the release variant. It also uploads an unsigned release artifact when Gradle produces it.
+In Android Studio, open the repository root, allow Gradle sync to finish, select the `app` configuration and the `debug` build variant, then use **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
+
+## CI behavior
+
+The **Android build** GitHub Actions workflow runs JVM/unit tests only. It intentionally does not assemble or upload APKs. The separate **Signed Android release** workflow assembles a signed release APK only when the owner has configured the required signing secrets.
 
 ## Signed release APK
 
@@ -69,7 +86,7 @@ A release signature belongs to the app owner. Create and protect your own Androi
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 
-See [docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md). Without those secrets, use the debug APK for testing; do not distribute an unsigned release as a production build.
+See [docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md). Use the debug APK for initial testing; do not distribute an unsigned release as a production build.
 
 ## Optional GPU training backend
 
