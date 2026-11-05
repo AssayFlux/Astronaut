@@ -113,6 +113,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  val personalizationPrefs=remember(context){context.getSharedPreferences("astronaut_personalization",Context.MODE_PRIVATE)}
  var responseStyle by remember{mutableStateOf(personalizationPrefs.getString("response_style","balanced")?:"balanced")}
  var darkAppearance by remember{mutableStateOf(personalizationPrefs.getBoolean("dark_appearance",false))}
+ var accentName by remember{mutableStateOf(personalizationPrefs.getString("accent_name","Mint")?:"Mint")}
  val onlinePrefs=remember(context){context.getSharedPreferences("astronaut_online_ai",Context.MODE_PRIVATE)}
  val secretStore=remember(context){EncryptedSecretStore(context)}
  var onlineBaseUrl by remember{mutableStateOf(onlinePrefs.getString("base_url","")?:"")}
@@ -298,7 +299,14 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    }catch(error:Throwable){runtimeMessage="Import failed: "+(error.message?:error.javaClass.simpleName)}
   }
  }
- MaterialTheme(colorScheme=if(darkAppearance) darkColorScheme(primary=Color(0xFF77C9A8),onPrimary=Color(0xFF003829),background=Color(0xFF101815),surface=Color(0xFF1B2722),onSurface=Color(0xFFE6F0EA),secondary=Color(0xFFB7D6C8)) else lightColorScheme(primary=Green,onPrimary=Color.White,background=Paper,surface=Color.White,onSurface=Ink,secondary=Color(0xFFB7D6C8))){
+ val selectedAccent=when(accentName){
+  "Blue"->Color(0xFF4968D8)
+  "Violet"->Color(0xFF7955C8)
+  "Amber"->Color(0xFFB7791F)
+  "Graphite"->Color(0xFF4B5563)
+  else->Color(0xFF16866A)
+ }
+ MaterialTheme(colorScheme=if(darkAppearance) darkColorScheme(primary=selectedAccent,onPrimary=Color.White,background=Color(0xFF101318),surface=Color(0xFF1A1F27),onSurface=Color(0xFFE9EDF3),secondary=selectedAccent) else lightColorScheme(primary=selectedAccent,onPrimary=Color.White,background=Color(0xFFF6F7F9),surface=Color.White,onSurface=Color(0xFF20242B),secondary=selectedAccent)){
   Scaffold(containerColor=MaterialTheme.colorScheme.background,topBar={TopAppBar(title={Column{
    Text("ASTRONAUT",style=MaterialTheme.typography.labelMedium,color=Green,fontWeight=FontWeight.Bold)
    Text(section.label,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
@@ -625,9 +633,10 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      }
     )
     Section.SETTINGS->SettingsScreen(
-     speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,responseStyle,darkAppearance,
+     speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,responseStyle,darkAppearance,accentName,
      {style->responseStyle=style;personalizationPrefs.edit().putString("response_style",style).apply()},
      {enabled->darkAppearance=enabled;personalizationPrefs.edit().putBoolean("dark_appearance",enabled).apply()},
+     {name->accentName=name;personalizationPrefs.edit().putString("accent_name",name).apply()},
      {tag->try{
       val normalized=OfflineVoiceController.normalizeLanguageTag(tag)
       speechLanguageTag=normalized
@@ -697,8 +706,25 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
 
 @Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,activeModelName:String?,runtimeMessage:String,loading:Boolean,sending:Boolean,voiceListening:Boolean,onVoice:()->Unit,onSpeak:(String)->Unit,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onDelete:(Long)->Unit,onlineEnabled:Boolean,onSend:()->Unit){
  var pendingDelete by remember{mutableStateOf<Long?>(null)}
+ var historyExpanded by remember{mutableStateOf(false)}
  Column(Modifier.fillMaxSize().padding(horizontal=16.dp)){
-  if(conversations.isNotEmpty()) LazyColumn(Modifier.heightIn(max=140.dp),verticalArrangement=Arrangement.spacedBy(2.dp)){items(conversations,key={it.id}){chat->Row(verticalAlignment=Alignment.CenterVertically){TextButton(onClick={onSelect(chat.id)},modifier=Modifier.weight(1f)){Text((if(chat.id==selectedId)"●  " else "")+chat.title,maxLines=1,overflow=TextOverflow.Ellipsis)};IconButton(onClick={pendingDelete=chat.id}){Icon(Icons.Default.DeleteOutline,"Delete conversation")}}}}
+  if(conversations.isNotEmpty()) Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+   Box(Modifier.weight(1f)){
+    OutlinedButton(onClick={historyExpanded=true},modifier=Modifier.fillMaxWidth()){
+     Icon(Icons.Default.Forum,null);Spacer(Modifier.width(8.dp))
+     Text(conversations.firstOrNull{it.id==selectedId}?.title?: "Choose conversation",maxLines=1,overflow=TextOverflow.Ellipsis,modifier=Modifier.weight(1f))
+     Icon(Icons.Default.ExpandMore,null)
+    }
+    DropdownMenu(expanded=historyExpanded,onDismissRequest={historyExpanded=false}){
+     conversations.forEach{chat->DropdownMenuItem(
+      text={Text(chat.title,maxLines=1,overflow=TextOverflow.Ellipsis)},
+      leadingIcon={Icon(if(chat.id==selectedId)Icons.Default.CheckCircle else Icons.Default.ChatBubbleOutline,null)},
+      trailingIcon={IconButton(onClick={pendingDelete=chat.id;historyExpanded=false}){Icon(Icons.Default.DeleteOutline,"Delete conversation")}},
+      onClick={onSelect(chat.id).also{historyExpanded=false}}
+     )}
+    }
+   }
+  }
   if(pendingDelete!=null) AlertDialog(onDismissRequest={pendingDelete=null},title={Text("Delete conversation?")},text={Text("This permanently deletes this chat and its messages from this device.")},confirmButton={TextButton(onClick={pendingDelete?.let(onDelete);pendingDelete=null}){Text("Delete")}},dismissButton={TextButton(onClick={pendingDelete=null}){Text("Cancel")}})
   if(messages.isEmpty()) Column(Modifier.weight(1f).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center){
    Box(Modifier.size(68.dp).background(Color(0xFFDCEBE3),CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.AutoAwesome,null,tint=Green,modifier=Modifier.size(32.dp))}
@@ -708,12 +734,12 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   }else LazyColumn(Modifier.weight(1f).fillMaxWidth(),contentPadding=PaddingValues(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
    items(messages,key={it.id}){message->val mine=message.role=="user"
     Row(Modifier.fillMaxWidth(),horizontalArrangement=if(mine)Arrangement.End else Arrangement.Start){
-     Surface(color=if(mine)Color(0xFFDCEBE3)else Color.White,shape=RoundedCornerShape(18.dp),modifier=Modifier.widthIn(max=320.dp)){
+     Surface(color=if(mine)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,shape=RoundedCornerShape(if(mine)22.dp else 16.dp),modifier=Modifier.widthIn(max=340.dp)){
       Column(Modifier.padding(14.dp)){
        if(message.body.isNotBlank()) Text(message.body,color=Ink)
        if(!mine&&message.body.isNotBlank()) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End){IconButton(onClick={onSpeak(message.body)}){Icon(Icons.Default.VolumeUp,"Read response aloud",tint=Green)}}
        if(message.attachmentName!=null){Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.AttachFile,null,tint=Green,modifier=Modifier.size(16.dp));Text(message.attachmentName,color=Green,style=MaterialTheme.typography.labelMedium)}}
-       Text(if(mine)"YOU" else "ASTRONAUT",style=MaterialTheme.typography.labelSmall,color=Muted)
+       Text(if(mine)"You" else "Astronaut",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.primary)
       }
      }
     }
@@ -723,7 +749,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    Icon(Icons.Default.AttachFile,null,tint=Green);Text(attachmentName,Modifier.weight(1f),maxLines=1,overflow=TextOverflow.Ellipsis)
    IconButton(onClick=onClearAttachment){Icon(Icons.Default.Close,"Remove attachment")}
   }
-  Surface(color=Color.White,shape=RoundedCornerShape(24.dp),shadowElevation=2.dp){
+  Surface(color=MaterialTheme.colorScheme.surface,shape=RoundedCornerShape(26.dp),shadowElevation=3.dp){
    Row(Modifier.padding(start=6.dp,end=8.dp,top=4.dp,bottom=4.dp),verticalAlignment=Alignment.CenterVertically){
     IconButton(onClick=onAttach){Icon(Icons.Default.AttachFile,"Attach file",tint=Muted)}
     IconButton(onClick=onVoice,enabled=!sending){Icon(if(voiceListening)Icons.Default.MicOff else Icons.Default.Mic,if(voiceListening)"Listening" else "Speak message",tint=if(voiceListening)Green else Muted)}
@@ -731,7 +757,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     IconButton(onClick=onSend,enabled=!sending&&(draft.isNotBlank()||attachmentName!=null)){if(sending)CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)else Icon(Icons.Default.Send,"Send",tint=Green)}
    }
   }
-  Text((if(onlineEnabled)"ONLINE inference · remote provider" else "Offline inference "+(if(activeModelName!=null)"· "+activeModelName else "· no model loaded")),style=MaterialTheme.typography.labelSmall,color=Muted,modifier=Modifier.padding(top=6.dp,bottom=8.dp))
+  Text((if(onlineEnabled)"Online · remote provider" else "On-device · "+(activeModelName?: "No model loaded")),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.primary,modifier=Modifier.padding(top=6.dp,bottom=8.dp))
  }
 }
 
@@ -927,7 +953,9 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
  speechStatus:String,
  responseStyle:String,
  darkAppearance:Boolean,
+ accentName:String,
  onResponseStyleChange:(String)->Unit,
+ onAccentChange:(String)->Unit,
  onDarkAppearanceChange:(Boolean)->Unit,
  onLanguageChange:(String)->Unit,
  onCheckLanguages:()->Unit,
@@ -947,8 +975,15 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
    FilterChip(selected=responseStyle=="detailed",onClick={onResponseStyleChange("detailed")},label={Text("Detailed")})
   }
   Row(verticalAlignment=Alignment.CenterVertically){
-   Text("Dark appearance",modifier=Modifier.weight(1f),fontWeight=FontWeight.Medium)
+   Column(Modifier.weight(1f)){Text("Dark appearance",fontWeight=FontWeight.Medium);Text("Use a low-glare dark workspace",style=MaterialTheme.typography.bodySmall,color=Muted)}
    Switch(checked=darkAppearance,onCheckedChange=onDarkAppearanceChange)
+  }
+  Text("Accent colour",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+  Text("Choose the highlight colour used by buttons and active controls.",style=MaterialTheme.typography.bodySmall,color=Muted)
+  Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+   listOf("Mint","Blue","Violet","Amber","Graphite").forEach{choice->
+    FilterChip(selected=accentName==choice,onClick={onAccentChange(choice)},label={Text(choice)})
+   }
   }
   Divider()
   Text("Privacy & device",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
@@ -957,6 +992,7 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
   InfoCard("Model requirement","Obtain a compatible .litertlm model separately, then import it in Models. Chat generation works offline after model installation.")
   Spacer(Modifier.height(12.dp))
   Text("Offline voice",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
+  Text("Voice names are shown as readable languages and quality levels instead of Android's technical voice IDs. Tap a voice to select and preview it.",color=Muted,style=MaterialTheme.typography.bodySmall)
   Text("Speech recognition uses Android's on-device recognizer only. Text-to-speech is restricted to installed voices that do not require a network connection.",color=Muted,style=MaterialTheme.typography.bodySmall)
   OutlinedTextField(languageDraft,{languageDraft=it},modifier=Modifier.fillMaxWidth(),label={Text("Speech language (BCP-47)")},placeholder={Text("en-US, hi-IN, bn-IN")},singleLine=true)
   Button(onClick={onLanguageChange(languageDraft)},modifier=Modifier.fillMaxWidth()){Text("Apply speech language")}
@@ -964,16 +1000,20 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
    OutlinedButton(onClick=onCheckLanguages,modifier=Modifier.weight(1f)){Text("Check packs")}
    Button(onClick=onDownloadLanguage,modifier=Modifier.weight(1f),enabled=recognition.downloadable.isNotEmpty()){Text("Download pack")}
   }
-  if(recognition.installed.isNotEmpty())Text("Installed offline ASR: "+recognition.installed.joinToString(),color=Green,style=MaterialTheme.typography.bodySmall)
-  if(recognition.downloadable.isNotEmpty())Text("Available to download: "+recognition.downloadable.joinToString(),color=Muted,style=MaterialTheme.typography.bodySmall)
-  if(recognition.pending.isNotEmpty())Text("Pending: "+recognition.pending.joinToString(),color=Muted,style=MaterialTheme.typography.bodySmall)
+  if(recognition.installed.isNotEmpty())Text("Installed for offline speech: "+recognition.installed.joinToString{friendlyLanguageName(it)},color=Green,style=MaterialTheme.typography.bodySmall)
+  if(recognition.downloadable.isNotEmpty())Text("Available to download: "+recognition.downloadable.joinToString{friendlyLanguageName(it)},color=Muted,style=MaterialTheme.typography.bodySmall)
+  if(recognition.pending.isNotEmpty())Text("Download pending: "+recognition.pending.joinToString{friendlyLanguageName(it)},color=Muted,style=MaterialTheme.typography.bodySmall)
   Text("Offline TTS voice",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
   Box{
    OutlinedButton(onClick={voiceMenu=true},modifier=Modifier.fillMaxWidth(),enabled=voices.isNotEmpty()){
     Text(voices.firstOrNull{it.name==selectedVoiceName}?.label?:if(voices.isEmpty())"No offline TTS voices installed" else voices.first().label)
    }
    DropdownMenu(expanded=voiceMenu,onDismissRequest={voiceMenu=false}){
-    voices.forEach{voice->DropdownMenuItem(text={Text(voice.label)},onClick={voiceMenu=false;onVoiceSelect(voice.name)})}
+    voices.forEach{voice->DropdownMenuItem(
+     text={Column{Text(voice.label);Text("Installed on this device · offline",style=MaterialTheme.typography.labelSmall,color=Muted)}},
+     leadingIcon={Icon(Icons.Default.RecordVoiceOver,null)},
+     onClick={voiceMenu=false;onVoiceSelect(voice.name);onTestVoice()}
+    )}
    }
   }
   OutlinedButton(onClick=onTestVoice,modifier=Modifier.fillMaxWidth(),enabled=voices.isNotEmpty()){Icon(Icons.Default.VolumeUp,null);Spacer(Modifier.width(8.dp));Text("Test offline voice")}
@@ -983,4 +1023,9 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
 }
 @Composable private fun InfoCard(title:String,body:String){Card(Modifier.fillMaxWidth().padding(bottom=10.dp)){Column(Modifier.padding(16.dp)){Text(title,fontWeight=FontWeight.SemiBold);Spacer(Modifier.height(4.dp));Text(body,color=Muted,style=MaterialTheme.typography.bodyMedium)}}}
 @Composable private fun EmptyState(title:String,body:String){Column(Modifier.fillMaxWidth().padding(vertical=24.dp),horizontalAlignment=Alignment.CenterHorizontally){Text(title,fontWeight=FontWeight.SemiBold);Text(body,color=Muted,style=MaterialTheme.typography.bodySmall)}}
+private fun friendlyLanguageName(tag:String):String {
+ val locale=java.util.Locale.forLanguageTag(tag)
+ val display=locale.getDisplayName(java.util.Locale.getDefault())
+ return if(display.isBlank())tag else "$display ($tag)"
+}
 private fun formatBytes(bytes:Long):String=when{bytes>=1073741824->"%.1f GB".format(bytes/1073741824.0);bytes>=1048576->"%.1f MB".format(bytes/1048576.0);bytes>=1024->"%.1f KB".format(bytes/1024.0);else->"$bytes B"}
