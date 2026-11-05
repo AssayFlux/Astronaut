@@ -1,6 +1,7 @@
 package org.offlineai.messenger.features
 
 import android.content.Context
+import android.os.StatFs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -35,7 +36,7 @@ class VerifiedModelDownloader(context: Context) {
         val digestKey = expectedSha256.lowercase()
         val partial = File(modelDirectory, ".$digestKey.part")
         val target = File(modelDirectory, digestKey.take(16) + "-" + safeName)
-        if (target.isFile && sha256(target).equals(digestKey, true)) return@withContext DownloadedModel(target, digestKey, target.length())
+        if (target.isFile && target.length() <= MAX_BYTES && sha256(target).equals(digestKey, true)) return@withContext DownloadedModel(target, digestKey, target.length())
         if (partial.length() > MAX_BYTES) partial.delete()
         var offset = partial.length()
         var redirects = 0
@@ -77,7 +78,13 @@ class VerifiedModelDownloader(context: Context) {
                 }
                 val remaining = candidate.contentLengthLong.takeIf { it >= 0 }
                 val total = remaining?.let { offset + it }?.takeIf { it > 0 }
-                if (total != null) require(total <= MAX_BYTES) { "Model exceeds the 15 GB download limit." }
+                if (total != null) {
+                    require(total <= MAX_BYTES) { "Model exceeds the 15 GB download limit." }
+                    val requiredSpace = (total - offset).coerceAtLeast(0L) + MIN_FREE_SPACE_BYTES
+                    require(StatFs(modelDirectory.absolutePath).availableBytes >= requiredSpace) {
+                        "Not enough free storage. Keep at least 512 MiB free beyond the model download."
+                    }
+                }
                 var downloaded = offset
                 candidate.inputStream.use { input ->
                     val output = (if (append) FileOutputStream(partial, true) else partial.outputStream()).buffered()
@@ -122,6 +129,7 @@ class VerifiedModelDownloader(context: Context) {
 
     companion object {
         private const val MAX_BYTES = 15_000_000_000L
+        private const val MIN_FREE_SPACE_BYTES = 512L * 1024L * 1024L
         private const val PROGRESS_INTERVAL = 512L * 1024L
     }
 }

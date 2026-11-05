@@ -1,6 +1,5 @@
 package org.offlineai.messenger.features
 
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test

@@ -19,6 +19,7 @@ class EncryptedSecretStore(context: Context, private val alias: String = DEFAULT
         require(value.isNotBlank())
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        cipher.updateAAD(name.toByteArray(Charsets.UTF_8))
         val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
         val encoded = Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + "." +
             Base64.encodeToString(encrypted, Base64.NO_WRAP)
@@ -33,6 +34,7 @@ class EncryptedSecretStore(context: Context, private val alias: String = DEFAULT
         val ciphertext = Base64.decode(parts[1], Base64.NO_WRAP)
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
+        cipher.updateAAD(name.toByteArray(Charsets.UTF_8))
         return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
     }
 

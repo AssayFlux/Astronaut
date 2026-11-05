@@ -25,11 +25,11 @@ The catalog payload schema version is 1:
     "description": "Model description",
     "license": "Apache-2.0",
     "license_url": "https://publisher.example/license",
-    "download_url": "https://publisher.example/model.litertlm",
+    "download_url": "https://publisher.example/model-small.gguf",
     "sha256": "<64 hex characters>",
-    "file_name": "model-small.litertlm",
-    "format": "litertlm",
-    "runtime": "litertlm",
+    "file_name": "model-small.gguf",
+    "format": "gguf",
+    "runtime": "llama.cpp",
     "min_sdk": 26,
     "min_ram_mb": 2048,
     "size_bytes": 123456789,
@@ -40,19 +40,20 @@ The catalog payload schema version is 1:
 }
 ```
 
-The parser verifies the envelope signature before parsing any catalog records, limits envelope and payload sizes, rejects duplicate IDs, non-HTTPS download/license URLs, invalid checksums, unsafe filenames, unsupported runtime/format values, excessive model sizes and invalid device requirements. `Ed25519CatalogVerifier` takes an X.509-encoded Ed25519 public key. The application/release owner must provision a publisher key through a trusted release configuration before treating any remote catalog as trusted. No publisher key or third-party model listing is fabricated or embedded by this change.
+The parser verifies the envelope signature before parsing any catalog records, limits envelope and payload sizes, rejects duplicate IDs, non-HTTPS download/license URLs, invalid checksums, unsafe filenames, unsupported runtime/format pairs, artifacts above 15 GB and invalid device requirements. Accepted format/runtime pairs currently include LiteRT-LM, GGUF/llama.cpp, ONNX/onnx-runtime-embeddings, TFLite/LiteRT, diffusion bundles/MNN, Whisper/whisper.cpp and Sherpa-ONNX. Acceptance means the catalog can safely describe and install the artifact; it does not mean every listed runtime is bundled. `Ed25519CatalogVerifier` takes an X.509-encoded Ed25519 public key. The application/release owner must provision a publisher key through a trusted release configuration before treating any remote catalog as trusted. No publisher key or third-party model listing is fabricated or embedded by this change.
 
 ## Compatibility and installation
 
-- `ModelCompatibilityChecker` compares Android API level, physical RAM, free private storage and the supported LiteRT-LM format.
+- `ModelCompatibilityChecker` compares Android API level, physical RAM and free private storage. It separately reports whether the runtime is bundled, so an otherwise downloadable GGUF/diffusion/Whisper artifact can be installed without being falsely marked runnable.
 - `ModelInstallStore` copies only checksum-matching files into app-private version directories.
 - Each version has an install manifest with publisher, license, version, file name, byte count, checksum and install time.
 - Versions are immutable: a version cannot be silently replaced by different bytes.
 - The active-version pointer is updated atomically. Previous versions are retained for rollback.
 - A version can only be removed when it is not active.
-- The store does not automatically load or activate an untrusted model. Runtime loading still needs the app's existing LiteRT-LM model-load path.
+- The store does not automatically load or activate an untrusted model. The Models screen permits inference only for file types with an implemented adapter. Current runnable catalog paths are LiteRT-LM chat/vision and ONNX MiniLM embeddings with their matching vocabulary file.
+- GGUF, diffusion and dedicated Whisper/Sherpa artifacts can be installed but their Load action remains disabled until their native/runtime adapter is bundled.
 
-The catalog, compatibility and install store are reusable application services. This change does not yet connect a publisher key or add a catalog-browsing screen to the Compose UI; the existing manual HTTPS URL + SHA-256 flow remains available. UI wiring and publisher onboarding are follow-up work, not claimed as complete.
+The catalog browser is wired into the Models screen. A publisher signing key and catalog URL must still be provisioned by the release owner; no third-party catalog or free-model availability is fabricated. The manual HTTPS URL + SHA-256 download flow remains available for supported artifact extensions.
 
 ## Training adapter to mobile artifact
 

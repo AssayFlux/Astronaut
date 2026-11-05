@@ -66,7 +66,8 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
                     Row { Checkbox(checked = licenseAccepted, onCheckedChange = { licenseAccepted = it }); Text("I have reviewed and accept this model license", modifier = Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodySmall) }
                     Text("${entry.license} · ${entry.sizeBytes / (1024 * 1024)} MiB · ${entry.capabilities.joinToString()}", style = MaterialTheme.typography.labelSmall)
                     if (check != null && !check.compatible) check.reasons.forEach { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                    else if (check?.compatible == true) Text("Compatible with this device", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                    else if (check?.let { it.compatible && it.runtimeAvailable } == true) Text("Device requirements passed · runtime is bundled", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                    else if (check?.compatible == true) Text("Download requirements passed · runtime is not bundled, so this artifact cannot run yet.", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
                     Button(onClick = {
                         installing = entry.id
                         scope.launch {
