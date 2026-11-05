@@ -195,7 +195,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
             document.attachmentText?.takeIf{it.isNotBlank()}?.let{index.add(document.attachmentName?: "attachment",it)}
            }
            val excerpts=index.contextFor(question,limit=4)
-           val projectId=conversations.firstOrNull{it.id==target}?.workspaceProjectId
+           val projectId=db.chatDao().conversation(target)?.workspaceProjectId
            val project=projects.firstOrNull{it.id==projectId}
            val augmentedQuestion=buildString{
             append(question)
