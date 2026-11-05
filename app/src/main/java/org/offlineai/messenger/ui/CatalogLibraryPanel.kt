@@ -37,9 +37,9 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
                         entries = catalog.models
                         val checker = ModelCompatibilityChecker(context)
                         compatibility = entries.associate { it.id to checker.check(it) }
-                        status = "Verified \${entries.size} models · catalog SHA-256 \${catalog.payloadSha256.take(16)}…"
+                        status = "Verified ${entries.size} models · catalog SHA-256 ${catalog.payloadSha256.take(16)}…"
                     } catch (e: Throwable) {
-                        status = "Catalog verification failed: \${e.message ?: e.javaClass.simpleName}"
+                        status = "Catalog verification failed: ${e.message ?: e.javaClass.simpleName}"
                         entries = emptyList()
                     } finally { loading = false }
                 }
@@ -59,12 +59,12 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(entry.name, fontWeight = FontWeight.SemiBold)
-                    Text("\${entry.publisher} · \${entry.version} · \${entry.architecture} · \${entry.quantization}", style = MaterialTheme.typography.labelSmall)
+                    Text("${entry.publisher} · ${entry.version} · ${entry.architecture} · ${entry.quantization}", style = MaterialTheme.typography.labelSmall)
                     Text(entry.description, style = MaterialTheme.typography.bodySmall)
                     if (activeInstalled != null) Text("Installed version: ${activeInstalled.version}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                     TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(entry.licenseUrl))) }) { Text("Read model license") }
                     Row { Checkbox(checked = licenseAccepted, onCheckedChange = { licenseAccepted = it }); Text("I have reviewed and accept this model license", modifier = Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodySmall) }
-                    Text("\${entry.license} · \${entry.sizeBytes / (1024 * 1024)} MiB · \${entry.capabilities.joinToString()}", style = MaterialTheme.typography.labelSmall)
+                    Text("${entry.license} · ${entry.sizeBytes / (1024 * 1024)} MiB · ${entry.capabilities.joinToString()}", style = MaterialTheme.typography.labelSmall)
                     if (check != null && !check.compatible) check.reasons.forEach { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     else if (check?.compatible == true) Text("Compatible with this device", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                     Button(onClick = {
@@ -72,11 +72,13 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
                         scope.launch {
                             try {
                                 val downloaded = VerifiedModelDownloader(context).download(entry.downloadUrl, entry.sha256, entry.fileName)
-                                val installed = ModelInstallStore(context).install(entry, downloaded.file)
+                                val store = ModelInstallStore(context)
+                                val installed = store.install(entry, downloaded.file)
+                                installedVersions.clear(); installedVersions.addAll(store.list(entry.id))
                                 onInstalled(entry, installed.file)
-                                status = "Installed \${entry.name} \${entry.version} and verified its active version."
+                                status = "Installed ${entry.name} ${entry.version} and verified its active version."
                             } catch (e: Throwable) {
-                                status = "Install failed: \${e.message ?: e.javaClass.simpleName}"
+                                status = "Install failed: ${e.message ?: e.javaClass.simpleName}"
                             } finally { installing = null }
                         }
                     }, enabled = check?.compatible == true && installing == null && licenseAccepted && activeInstalled?.version != entry.version) {
