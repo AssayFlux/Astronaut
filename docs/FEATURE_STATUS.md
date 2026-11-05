@@ -33,7 +33,10 @@ This file distinguishes implemented code from behavior that still requires hardw
 
 ## Build and release
 
-- [x] Android JVM unit-test GitHub Actions workflow\n- [x] Android emulator instrumentation smoke tests in CI\n- [x] Debug APK assembly and artifact upload in CI\n- [x] Backend pytest CI workflow
+- [x] Android JVM unit-test GitHub Actions workflow
+- [x] Android emulator instrumentation smoke tests in CI
+- [x] Debug APK assembly and artifact upload in CI
+- [x] Backend pytest CI workflow
 - [x] Security/privacy source checklist and model publisher key lifecycle documentation
 - [ ] Manual physical-device APK installation and validation by the owner
 - [ ] Production signing with owner-provided keystore and CI secrets
