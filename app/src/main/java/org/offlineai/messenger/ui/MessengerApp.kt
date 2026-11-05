@@ -399,7 +399,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       visionModelPath=next
       if(activeModelPath==path){scope.launch{runtime.unload();activeModelPath=null;activeModelName=null;activeModelVision=false;runtimeMessage="Vision setting changed. Reload this model to apply it."}}
      }, { entry, file ->
-      db.modelDao().add(LocalModelEntity("catalog:"+entry.id+":"+entry.version,entry.name,"application/octet-stream",file.length(),modelPath=file.absolutePath))
+      scope.launch { db.modelDao().add(LocalModelEntity("catalog:"+entry.id+":"+entry.version,entry.name,"application/octet-stream",file.length(),modelPath=file.absolutePath)) }
      })
     Section.TRAINING->TrainingLabScreen(
      datasetName,datasetReport,datasetStatus,datasetBusy,trainingJob,trainingStatus,trainingBusy,
