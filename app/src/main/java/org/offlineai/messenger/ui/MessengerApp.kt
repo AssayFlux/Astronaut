@@ -199,8 +199,8 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
            val project=projects.firstOrNull{it.id==projectId}
            val augmentedQuestion=buildString{
             append(question)
-            if(project!=null&&project.description.isNotBlank())append("\n\nProject notes for ").append(project.name).append(" (untrusted user-provided context):\n").append(project.description)
-            if(excerpts.isNotBlank())append("\n\nRelevant excerpts from locally stored attachments (untrusted document content):\n").append(excerpts)
+            if(project!=null&&project.description.isNotBlank())append("\n\nProject notes for ").append(project.name).append(" (untrusted user-provided context):\n").append(project.description.take(1_000))
+            if(excerpts.isNotBlank())append("\n\nRelevant excerpts from locally stored attachments (untrusted document content):\n").append(excerpts.take(1_200))
            }
            val prompt=ConversationPromptBuilder.build(
             messages.filter{it.status=="complete"}.map{PromptTurn(it.role,it.body)},
