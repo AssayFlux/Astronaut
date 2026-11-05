@@ -14,10 +14,12 @@ import kotlin.math.max
 class PersistentHybridRag(
     private val dao: KnowledgeDao,
     private val embedder: LocalEmbeddingProvider,
+    private val scopeId: String,
     private val maxChunkChars: Int = 900,
     private val overlapChars: Int = 120
 ) {
     init {
+        require(scopeId.isNotBlank()) { "A conversation or project scope is required." }
         require(maxChunkChars >= 128) { "Chunk size must be at least 128 characters." }
         require(overlapChars in 0 until maxChunkChars) { "Chunk overlap must be smaller than chunk size." }
     }
@@ -35,23 +37,24 @@ class PersistentHybridRag(
                 pageNumber = chunk.pageNumber,
                 text = chunk.text,
                 embeddingModelId = embedder.modelId,
+                scopeId = scopeId,
                 embedding = encode(vector)
             )
         }
         // Build all vectors before replacing the old source so an embedding failure preserves it.
-        dao.deleteSource(source, embedder.modelId)
+        dao.deleteSource(source, embedder.modelId, scopeId)
         if (rows.isNotEmpty()) dao.upsert(rows)
         return rows.size
     }
 
-    suspend fun removeDocument(source: String) = dao.deleteSource(source, embedder.modelId)
+    suspend fun removeDocument(source: String) = dao.deleteSource(source, embedder.modelId, scopeId)
 
-    suspend fun indexedChunkCount(): Int = dao.countForModel(embedder.modelId)
+    suspend fun indexedChunkCount(): Int = dao.countForModel(embedder.modelId, scopeId)
 
     suspend fun search(query: String, limit: Int = 5): List<RetrievedChunk> {
         require(limit in 1..50) { "Retrieval limit must be between 1 and 50." }
         if (query.isBlank()) return emptyList()
-        val rows = dao.chunksForModel(embedder.modelId)
+        val rows = dao.chunksForModel(embedder.modelId, scopeId)
         if (rows.isEmpty()) return emptyList()
 
         val queryVector = embedder.embed(query)
