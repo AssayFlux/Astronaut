@@ -260,14 +260,14 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    }}}
   ){padding->Column(Modifier.fillMaxSize().padding(padding)){
    when(section){
-    Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,activeModelName,runtimeMessage,loadingModel,sending,voiceListening,onlineEnabled,
+    Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,activeModelName,runtimeMessage,loadingModel,sending,voiceListening,
      {if(voiceListening)voiceController.stopListening()else if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)voiceController.startListening()else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)},
      {text->voiceController.speak(text)} ,
      {attachmentPicker.launch(arrayOf("*/*"))},{pendingAttachment=null},{selectedConversation=it},{id->scope.launch{
       db.chatDao().deleteMessages(id)
       db.chatDao().deleteConversation(id)
       if(selectedConversation==id)selectedConversation=null
-     }},{
+     }},onlineEnabled,{
       val text=draft.trim();val target=conversationId;val attachment=pendingAttachment
       if((text.isNotEmpty()||attachment!=null)&&target!=null&&!sending){
        sending=true
@@ -559,6 +559,48 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }){Text("Create")}},dismissButton={TextButton(onClick={showNewProject=false}){Text("Cancel")}})
 }
 
+
+@Composable private fun OnlineAiScreen(
+ baseUrl:String,
+ modelId:String,
+ hasKey:Boolean,
+ enabled:Boolean,
+ status:String,
+ onSave:(String,String,String)->Unit,
+ onToggle:(Boolean)->Unit,
+ onClearKey:()->Unit,
+ onTest:()->Unit
+){
+ var urlDraft by remember(baseUrl){mutableStateOf(baseUrl)}
+ var modelDraft by remember(modelId){mutableStateOf(modelId)}
+ var keyDraft by remember{mutableStateOf("")}
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+  Text("Online AI providers",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
+  Text("Connect an OpenAI-compatible endpoint. This supports providers that expose the Chat Completions API, including provider-hosted free tiers where available.",color=Muted)
+  Card{Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+   Text("Privacy boundary",fontWeight=FontWeight.SemiBold)
+   Text("When Online mode is enabled, Astronaut sends only the current text prompt and selected model ID. It does NOT send previous chat messages, project notes, local documents, images or attachments. Requests go to the endpoint you configure. Provider pricing, free quotas and data retention are controlled by that provider.",style=MaterialTheme.typography.bodySmall,color=Muted)
+  }}
+  OutlinedTextField(urlDraft,{urlDraft=it},modifier=Modifier.fillMaxWidth(),label={Text("Provider base URL (HTTPS)")},placeholder={Text("https://api.example.com")},singleLine=true)
+  OutlinedTextField(modelDraft,{modelDraft=it},modifier=Modifier.fillMaxWidth(),label={Text("Exact model ID")},placeholder={Text("provider/model-name")},singleLine=true)
+  OutlinedTextField(keyDraft,{keyDraft=it},modifier=Modifier.fillMaxWidth(),label={Text(if(hasKey)"Replace API key (leave blank to keep saved key)" else "API key")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
+  Button(onClick={onSave(urlDraft.trim(),modelDraft.trim(),keyDraft)},modifier=Modifier.fillMaxWidth(),enabled=urlDraft.startsWith("https://",true)&&modelDraft.isNotBlank()&&keyDraft.length>=8){
+   Icon(Icons.Default.Save,null);Spacer(Modifier.width(8.dp));Text("Save provider and encrypted API key")
+  }
+  Text(if(hasKey)"An API key is saved encrypted using Android Keystore." else "No API key saved.",style=MaterialTheme.typography.bodySmall,color=Muted)
+  OutlinedButton(onClick=onTest,modifier=Modifier.fillMaxWidth(),enabled=hasKey&&baseUrl.startsWith("https://")&&modelId.isNotBlank()){Icon(Icons.Default.WifiTethering,null);Spacer(Modifier.width(8.dp));Text("Test provider connection")}
+  Row(verticalAlignment=Alignment.CenterVertically){
+   Column(Modifier.weight(1f)){
+    Text("Use online inference",fontWeight=FontWeight.SemiBold)
+    Text("Explicit opt-in. Turning this off returns chat to local inference.",style=MaterialTheme.typography.bodySmall,color=Muted)
+   }
+   Switch(checked=enabled,onCheckedChange=onToggle,enabled=hasKey&&baseUrl.startsWith("https://")&&modelId.isNotBlank()||enabled)
+  }
+  if(hasKey)TextButton(onClick=onClearKey){Text("Remove saved API key and disable online mode")}
+  Text(status,color=if(status.contains("failed",true)||status.contains("could not",true))Color(0xFFB45335) else Green,style=MaterialTheme.typography.bodySmall)
+ }
+}
+
 @Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,activeModelName:String?,runtimeMessage:String,loading:Boolean,sending:Boolean,voiceListening:Boolean,onVoice:()->Unit,onSpeak:(String)->Unit,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onDelete:(Long)->Unit,onlineEnabled:Boolean,onSend:()->Unit){
  var pendingDelete by remember{mutableStateOf<Long?>(null)}
  Column(Modifier.fillMaxSize().padding(horizontal=16.dp)){
@@ -595,7 +637,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     IconButton(onClick=onSend,enabled=!sending&&(draft.isNotBlank()||attachmentName!=null)){if(sending)CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)else Icon(Icons.Default.Send,"Send",tint=Green)}
    }
   }
-  Text((if(onlineEnabled)"ONLINE inference · "+onlineModelLabelPlaceholder() else "Offline inference "+(if(activeModelName!=null)"· "+activeModelName else "· no model loaded")),style=MaterialTheme.typography.labelSmall,color=Muted,modifier=Modifier.padding(top=6.dp,bottom=8.dp))
+  Text((if(onlineEnabled)"ONLINE inference · remote provider" else "Offline inference "+(if(activeModelName!=null)"· "+activeModelName else "· no model loaded")),style=MaterialTheme.typography.labelSmall,color=Muted,modifier=Modifier.padding(top=6.dp,bottom=8.dp))
  }
 }
 
