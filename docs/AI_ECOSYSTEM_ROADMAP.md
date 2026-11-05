@@ -19,6 +19,14 @@ All improvements are developed on a feature branch from this baseline. Do not re
 3. Personalization settings now include concise, balanced, or detailed response style and a dark appearance preference. Preferences remain local to the device.
 4. Response style is added to the user's prompt context; it does not alter or fine-tune model weights.
 
+## Multi-format integration update
+
+The universal AI adapter contracts, trusted runtime registry, built-in LiteRT-LM and ONNX embedding adapters, Android memory/API preflight helper, multi-format signed catalog validation, and 15 GB verified-download ceiling are now present in the current feature branch. The model library blocks Load for artifacts whose runtime is not installed; it does not try to feed GGUF, diffusion or Whisper files into LiteRT-LM.
+
+An OpenAI-compatible online chat provider is also connected to an Online AI screen. Online mode is explicit opt-in, HTTPS-only, uses an Android Keystore AES-GCM credential store, sends only the current text prompt and response-style instruction, and never silently falls back. It does not upload previous messages, project notes, documents or attachments.
+
+Still requiring real engine work: llama.cpp/JNI for GGUF, a mobile diffusion backend for image generation, and Whisper.cpp/Sherpa-ONNX for dedicated offline ASR. A catalog entry or successful download is not proof that an engine can execute it.
+
 ## Why a loaded model can disappear
 
 A model's weights and runtime engine live in the Android app process. Android can terminate that process under memory pressure, after a crash, or when reclaiming resources. No ordinary in-process reference can prevent process termination. Astronaut therefore persists the selected model identity and restores the runtime on the next process start. Do not claim that a model remains resident after Android has killed the process.
