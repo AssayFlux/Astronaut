@@ -303,7 +303,11 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   "Graphite"->Color(0xFF4B5563)
   else->Color(0xFF16866A)
  }
- MaterialTheme(colorScheme=if(darkAppearance) darkColorScheme(primary=selectedAccent,onPrimary=Color.White,background=Color(0xFF101318),surface=Color(0xFF1A1F27),onSurface=Color(0xFFE9EDF3),secondary=selectedAccent) else lightColorScheme(primary=selectedAccent,onPrimary=Color.White,background=Color(0xFFF6F7F9),surface=Color.White,onSurface=Color(0xFF20242B),secondary=selectedAccent)){
+ val selectedOnAccent=if(accentName=="Amber")Color(0xFF211707)else Color.White
+ MaterialTheme(colorScheme=if(darkAppearance)
+  darkColorScheme(primary=selectedAccent,onPrimary=selectedOnAccent,primaryContainer=selectedAccent.copy(alpha=0.28f),onPrimaryContainer=Color(0xFFE9EDF3),background=Color(0xFF101318),surface=Color(0xFF1A1F27),onSurface=Color(0xFFE9EDF3),secondary=selectedAccent)
+ else
+  lightColorScheme(primary=selectedAccent,onPrimary=selectedOnAccent,primaryContainer=selectedAccent.copy(alpha=0.14f),onPrimaryContainer=Color(0xFF20242B),background=Color(0xFFF6F7F9),surface=Color.White,onSurface=Color(0xFF20242B),secondary=selectedAccent)){
   Scaffold(containerColor=MaterialTheme.colorScheme.background,topBar={TopAppBar(title={Column{
    Text("ASTRONAUT",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Bold)
    Text(section.label,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
