@@ -95,7 +95,7 @@ class VerifiedModelDownloader(context: Context) {
                             val count = input.read(buffer)
                             if (count < 0) break
                             downloaded += count
-                            require(downloaded <= MAX_BYTES) { "Model exceeds the 8 GiB download limit." }
+                            require(downloaded <= MAX_BYTES) { "Model exceeds the 15 GB download limit." }
                             sink.write(buffer, 0, count)
                             if (downloaded % PROGRESS_INTERVAL < count) {
                                 val progress = downloaded
