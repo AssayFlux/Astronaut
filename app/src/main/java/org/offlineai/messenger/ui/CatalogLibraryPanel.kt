@@ -134,17 +134,34 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
                             )
                         }
                         if (activeInstalled != null) {
-                            AssistChip(onClick = {}, label = { Text("Installed") }, leadingIcon = {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                            })
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Row(
+                                    Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Text("Installed", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
                         }
                     }
 
                     Text(entry.description, style = MaterialTheme.typography.bodyMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AssistChip(onClick = {}, label = { Text(entry.format.uppercase()) })
-                        AssistChip(onClick = {}, label = { Text(entry.quantization) })
-                        AssistChip(onClick = {}, label = { Text(formatCatalogSize(entry.sizeBytes)) })
+                        listOf(entry.format.uppercase(), entry.quantization, formatCatalogSize(entry.sizeBytes)).forEach { label ->
+                            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.small) {
+                                Text(
+                                    label,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                     Text(
                         "Architecture: ${entry.architecture} · Minimum Android: ${entry.minSdk} · RAM requirement: ${entry.minRamMb} MiB",
@@ -184,7 +201,7 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
 
                     if (thisInstalling) {
                         LinearProgressIndicator(
-                            progress = { downloadProgress },
+                            progress = downloadProgress,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text(downloadLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
