@@ -1,5 +1,6 @@
 package org.offlineai.messenger.features
 
+import android.annotation.TargetApi
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -232,6 +233,7 @@ class OfflineVoiceController(
         engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "astronaut-offline-speech")
     }
 
+    @TargetApi(Build.VERSION_CODES.S)
     private fun getOrCreateRecognizer(): SpeechRecognizer {
         return recognizer ?: SpeechRecognizer.createOnDeviceSpeechRecognizer(appContext).also {
             it.setRecognitionListener(listener)
