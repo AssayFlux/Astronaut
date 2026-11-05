@@ -1,0 +1,129 @@
+package org.offlineai.messenger.features
+
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.URI
+import java.security.KeyFactory
+import java.security.Signature
+import java.security.spec.X509EncodedKeySpec
+import java.util.Base64
+
+enum class ModelCapability { CHAT, CODE, VISION, AUDIO_TRANSCRIPTION, EMBEDDING, IMAGE_GENERATION }
+
+data class ModelCatalogEntry(
+    val id: String,
+    val name: String,
+    val publisher: String,
+    val version: String,
+    val description: String,
+    val license: String,
+    val licenseUrl: String,
+    val downloadUrl: String,
+    val sha256: String,
+    val fileName: String,
+    val format: String,
+    val runtime: String,
+    val minSdk: Int,
+    val minRamMb: Int,
+    val sizeBytes: Long,
+    val capabilities: Set<ModelCapability>,
+    val architecture: String,
+    val quantization: String
+)
+
+data class VerifiedModelCatalog(
+    val schemaVersion: Int,
+    val generatedAt: String,
+    val models: List<ModelCatalogEntry>,
+    val payloadSha256: String
+)
+
+/** A catalog is trusted only after its exact payload bytes pass a publisher-key signature check. */
+fun interface CatalogSignatureVerifier {
+    fun verify(payload: ByteArray, signature: ByteArray): Boolean
+}
+
+class Ed25519CatalogVerifier(x509PublicKeyBase64: String) : CatalogSignatureVerifier {
+    private val publicKey = KeyFactory.getInstance("Ed25519").generatePublic(
+        X509EncodedKeySpec(Base64.getDecoder().decode(x509PublicKeyBase64))
+    )
+
+    override fun verify(payload: ByteArray, signature: ByteArray): Boolean {
+        val verifier = Signature.getInstance("Ed25519")
+        verifier.initVerify(publicKey)
+        verifier.update(payload)
+        return verifier.verify(signature)
+    }
+}
+
+object ModelCatalogParser {
+    private val idPattern = Regex("^[a-z0-9][a-z0-9._-]{1,79}$")
+    private val shaPattern = Regex("^[A-Fa-f0-9]{64}$")
+
+    fun parseSigned(envelopeBytes: ByteArray, verifier: CatalogSignatureVerifier): VerifiedModelCatalog {
+        require(envelopeBytes.size in 1..(2 * 1024 * 1024)) { "Catalog envelope must be between 1 byte and 2 MiB." }
+        val envelope = JSONObject(envelopeBytes.toString(Charsets.UTF_8))
+        val payload = Base64.getDecoder().decode(envelope.getString("payload"))
+        val signature = Base64.getDecoder().decode(envelope.getString("signature"))
+        require(payload.size in 1..(1024 * 1024)) { "Catalog payload exceeds 1 MiB." }
+        require(verifier.verify(payload, signature)) { "Catalog signature is invalid. No catalog entries were trusted." }
+        return parseVerifiedPayload(payload)
+    }
+
+    internal fun parseVerifiedPayload(payload: ByteArray): VerifiedModelCatalog {
+        val json = JSONObject(payload.toString(Charsets.UTF_8))
+        require(json.getInt("schema_version") == 1) { "Unsupported model catalog schema." }
+        val modelsJson = json.getJSONArray("models")
+        require(modelsJson.length() <= 500) { "Catalog contains too many models." }
+        val models = (0 until modelsJson.length()).map { parseEntry(modelsJson.getJSONObject(it)) }
+        require(models.map { it.id }.distinct().size == models.size) { "Catalog contains duplicate model IDs." }
+        return VerifiedModelCatalog(
+            schemaVersion = 1,
+            generatedAt = json.getString("generated_at"),
+            models = models,
+            payloadSha256 = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(payload).joinToString("") { "%02x".format(it) }
+        )
+    }
+
+    private fun parseEntry(json: JSONObject): ModelCatalogEntry {
+        val id = json.getString("id")
+        require(idPattern.matches(id)) { "Invalid model ID: $id" }
+        val sha = json.getString("sha256")
+        require(shaPattern.matches(sha)) { "Model $id has an invalid SHA-256 checksum." }
+        val download = json.getString("download_url")
+        val licenseUrl = json.getString("license_url")
+        require(isHttps(download) && isHttps(licenseUrl)) { "Model $id must use HTTPS for downloads and license links." }
+        val fileName = json.getString("file_name")
+        require(fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}\\.litertlm$", RegexOption.IGNORE_CASE))) {
+            "Model $id must reference a safe .litertlm filename."
+        }
+        val format = json.getString("format")
+        require(format == "litertlm") { "Unsupported mobile model format for $id: $format" }
+        val runtime = json.getString("runtime")
+        require(runtime == "litertlm") { "Unsupported runtime for $id: $runtime" }
+        val size = json.getLong("size_bytes")
+        require(size in 1..(8L * 1024 * 1024 * 1024)) { "Model $id exceeds the supported 8 GiB size limit." }
+        val minSdk = json.getInt("min_sdk")
+        val minRam = json.getInt("min_ram_mb")
+        require(minSdk in 26..100 && minRam in 256..262144) { "Invalid device requirements for $id." }
+        val capabilitiesJson = json.getJSONArray("capabilities")
+        val capabilities = (0 until capabilitiesJson.length()).map {
+            ModelCapability.valueOf(capabilitiesJson.getString(it).uppercase())
+        }.toSet()
+        require(capabilities.isNotEmpty()) { "Model $id must declare at least one capability." }
+        return ModelCatalogEntry(
+            id=id, name=json.getString("name"), publisher=json.getString("publisher"),
+            version=json.getString("version"), description=json.optString("description"),
+            license=json.getString("license"), licenseUrl=licenseUrl, downloadUrl=download,
+            sha256=sha, fileName=fileName, format=format, runtime=runtime, minSdk=minSdk,
+            minRamMb=minRam, sizeBytes=size, capabilities=capabilities,
+            architecture=json.getString("architecture"), quantization=json.getString("quantization")
+        )
+    }
+
+    private fun isHttps(value: String): Boolean = runCatching {
+        val uri = URI(value)
+        uri.scheme.equals("https", true) && !uri.host.isNullOrBlank() && uri.userInfo == null
+    }.getOrDefault(false)
+}

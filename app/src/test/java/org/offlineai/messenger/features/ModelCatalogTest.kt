@@ -1,0 +1,70 @@
+package org.offlineai.messenger.features
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.util.Base64
+
+class ModelCatalogTest {
+    private fun modelJson(
+        id: String = "astronaut-chat-small",
+        sha: String = "a".repeat(64),
+        url: String = "https://models.example.org/chat.litertlm"
+    ) = """
+        {
+          "id":"$id","name":"Astronaut Chat Small","publisher":"Example Publisher",
+          "version":"1.0.0","description":"Test model","license":"Apache-2.0",
+          "license_url":"https://models.example.org/license",
+          "download_url":"$url","sha256":"$sha","file_name":"chat-small.litertlm",
+          "format":"litertlm","runtime":"litertlm","min_sdk":26,"min_ram_mb":2048,
+          "size_bytes":1048576,"capabilities":["chat","code"],
+          "architecture":"transformer","quantization":"int4"
+        }
+    """.trimIndent()
+
+    private fun payload(vararg models: String) = """
+        {"schema_version":1,"generated_at":"2026-11-05T00:00:00Z","models":[${models.joinToString(",")}]}
+    """.trimIndent().toByteArray()
+
+    @Test fun parsesModelMetadataAndCapabilities() {
+        val catalog = ModelCatalogParser.parseVerifiedPayload(payload(modelJson()))
+        val model = catalog.models.single()
+        assertEquals("astronaut-chat-small", model.id)
+        assertEquals(setOf(ModelCapability.CHAT, ModelCapability.CODE), model.capabilities)
+        assertEquals(1048576L, model.sizeBytes)
+    }
+
+    @Test fun rejectsNonHttpsDownload() {
+        val error = runCatching {
+            ModelCatalogParser.parseVerifiedPayload(payload(modelJson(url="http://models.example.org/model.litertlm")))
+        }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test fun rejectsInvalidChecksum() {
+        val error = runCatching {
+            ModelCatalogParser.parseVerifiedPayload(payload(modelJson(sha="not-a-checksum")))
+        }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test fun rejectsDuplicateModelIds() {
+        val error = runCatching {
+            ModelCatalogParser.parseVerifiedPayload(payload(modelJson(), modelJson()))
+        }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test fun signedEnvelopeRequiresVerifierApproval() {
+        val raw = payload(modelJson())
+        val envelope = """{"payload":"${Base64.getEncoder().encodeToString(raw)}","signature":"AQ=="}""".toByteArray()
+        val rejected = runCatching {
+            ModelCatalogParser.parseSigned(envelope, CatalogSignatureVerifier { _, _ -> false })
+        }.exceptionOrNull()
+        assertTrue(rejected is IllegalArgumentException)
+        val accepted = ModelCatalogParser.parseSigned(envelope, CatalogSignatureVerifier { bytes, signature ->
+            bytes.contentEquals(raw) && signature.contentEquals(byteArrayOf(1))
+        })
+        assertEquals(1, accepted.models.size)
+    }
+}

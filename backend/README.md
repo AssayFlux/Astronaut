@@ -43,6 +43,20 @@ Start Redis and the API with the same data directory, model directory and enviro
 - Progress is written to SQLite from Hugging Face Trainer callbacks.
 - Artifacts are PEFT adapter weights plus a manifest. They are **not** directly importable `.litertlm` files; conversion/merge/export for the Android runtime is a separate step.
 
+## Mobile model export and provenance
+
+The training worker produces PEFT adapter artifacts, not Android-ready LiteRT-LM model files. A compatible external converter must merge/convert the base model and adapter first. After conversion, package the resulting `.litertlm` file and its source adapter provenance:
+
+```bash
+python -m astronaut_api.mobile_export \
+  --converted-model /path/to/converted.litertlm \
+  --adapter-zip /path/to/adapter.zip \
+  --metadata-json export-metadata.json \
+  --output-dir ./mobile-release
+```
+
+The packaging command validates archive paths, records SHA-256 checksums for both source adapter and converted artifact, and writes a compatibility/license/converter manifest. It does not implement model conversion or verify internal LiteRT-LM tensor semantics. The publisher must sign the catalog payload separately; never store its private signing key in the app or repository.
+
 ## Security and operations
 
 - API key authentication is mandatory for all dataset and job routes.
