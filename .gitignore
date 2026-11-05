@@ -223,3 +223,8 @@ __marimo__/
 *.jks
 *.keystore
 release-key.properties
+
+# Publisher signing secrets (never commit)
+*.pem
+*.key
+catalog-private-key*
