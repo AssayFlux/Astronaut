@@ -14,7 +14,8 @@ data class ModelCompatibility(
     val compatible: Boolean,
     val reasons: List<String>,
     val deviceRamMb: Long,
-    val availableStorageBytes: Long
+    val availableStorageBytes: Long,
+    val runtimeAvailable: Boolean
 )
 
 class ModelCompatibilityChecker(context: Context) {
@@ -32,8 +33,12 @@ class ModelCompatibilityChecker(context: Context) {
         if (availableStorage < (model.sizeBytes * 2L) + MIN_INSTALL_HEADROOM_BYTES) {
             reasons += "Insufficient private storage for download, installation and temporary files."
         }
-        if (model.runtime != "litertlm" || model.format != "litertlm") reasons += "This app build does not support the model's runtime or file format."
-        return ModelCompatibility(reasons.isEmpty(), reasons, totalRamMb, availableStorage)
+        val runtimeAvailable = when (model.format to model.runtime) {
+            "litertlm" to "litertlm" -> true
+            "onnx" to "onnx-runtime-embeddings" -> model.capabilities == setOf(ModelCapability.EMBEDDING)
+            else -> false
+        }
+        return ModelCompatibility(reasons.isEmpty(), reasons, totalRamMb, availableStorage, runtimeAvailable)
     }
 
     companion object {
@@ -63,7 +68,7 @@ class ModelInstallStore(context: Context) {
         require(verifiedSource.isFile && verifiedSource.canRead()) { "Verified model source is missing or unreadable." }
         require(entry.id.matches(Regex("^[a-z0-9][a-z0-9._-]{1,79}$"))) { "Invalid model ID." }
         require(entry.version.matches(Regex("^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"))) { "Invalid model version." }
-        require(entry.fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}\\.litertlm$", RegexOption.IGNORE_CASE))) { "Invalid model filename." }
+        require(entry.fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}$")) && entry.fileName.contains('.')) { "Invalid model filename." }
         require(entry.sha256.matches(Regex("^[A-Fa-f0-9]{64}$"))) { "Invalid model checksum." }
         require(verifiedSource.length() == entry.sizeBytes) { "Downloaded model size does not match the signed catalog." }
         val modelRoot = File(root, entry.id).apply { mkdirs() }
@@ -95,6 +100,8 @@ class ModelInstallStore(context: Context) {
             val metadata = JSONObject()
                 .put("model_id", entry.id).put("name", entry.name).put("publisher", entry.publisher)
                 .put("version", entry.version).put("file_name", entry.fileName)
+                .put("format", entry.format).put("runtime", entry.runtime)
+                .put("capabilities", org.json.JSONArray(entry.capabilities.map { it.name.lowercase() }))
                 .put("sha256", actual).put("size_bytes", stagedFile.length())
                 .put("license", entry.license).put("license_url", entry.licenseUrl)
                 .put("installed_at", System.currentTimeMillis())
