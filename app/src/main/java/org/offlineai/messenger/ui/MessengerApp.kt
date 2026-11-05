@@ -160,7 +160,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     val vocab=embeddingVocabPath?.let(::File)
     if(vocab?.isFile==true){
      embeddingStatus="Validating local embedding model…"
-     withContext(Dispatchers.IO){OnnxWordPieceEmbedder(target,vocab,target.name+":"+target.length()).use{it.embed("Astronaut local semantic retrieval test")}}
+     withContext(Dispatchers.IO){OnnxWordPieceEmbedder(target,vocab,target.name+":"+target.length()+":"+vocab.name+":"+vocab.length()).use{it.embed("Astronaut local semantic retrieval test")}}
      embeddingStatus="Semantic retrieval ready · "+name
     }else embeddingStatus="ONNX model imported. Now import the matching vocab.txt file."
    }catch(error:Throwable){embeddingStatus="Embedding model import failed: "+(error.message?:error.javaClass.simpleName)}
@@ -179,7 +179,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     val model=embeddingModelPath?.let(::File)
     if(model?.isFile==true){
      embeddingStatus="Validating local embedding model…"
-     withContext(Dispatchers.IO){OnnxWordPieceEmbedder(model,target,model.name+":"+model.length()).use{it.embed("Astronaut local semantic retrieval test")}}
+     withContext(Dispatchers.IO){OnnxWordPieceEmbedder(model,target,model.name+":"+model.length()+":"+target.name+":"+target.length()).use{it.embed("Astronaut local semantic retrieval test")}}
      embeddingStatus="Semantic retrieval ready · "+model.name
     }else embeddingStatus="Vocabulary imported. Now import a compatible ONNX embedding model."
    }catch(error:Throwable){embeddingStatus="Vocabulary import failed: "+(error.message?:error.javaClass.simpleName)}
@@ -246,7 +246,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
            val embeddingVocab=embeddingVocabPath?.let(::File)
            val excerpts=if(embeddingModel?.isFile==true&&embeddingVocab?.isFile==true){
             withContext(Dispatchers.IO){
-             val embedder=OnnxWordPieceEmbedder(embeddingModel,embeddingVocab,embeddingModel.name+":"+embeddingModel.length())
+             val embedder=OnnxWordPieceEmbedder(embeddingModel,embeddingVocab,embeddingModel.name+":"+embeddingModel.length()+":"+embeddingVocab.name+":"+embeddingVocab.length())
              try{
               val rag=PersistentHybridRag(db.knowledgeDao(),embedder,target.toString())
               documents.forEach{document->
@@ -330,7 +330,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     }
     Section.MODELS->ModelsScreen(
      models,activeModelPath,activeModelName,runtimeMessage,loadingModel,downloadingModel,downloadProgress,downloadStatus,
-     embeddingModelPath!=null&&embeddingVocabPath!=null,embeddingStatus,
+     embeddingModelPath?.let(::File)?.isFile==true&&embeddingVocabPath?.let(::File)?.isFile==true,embeddingStatus,
      {embeddingModelPicker.launch(arrayOf("application/octet-stream","*/*"))},
      {embeddingVocabPicker.launch(arrayOf("text/plain","*/*"))},
      {modelPicker.launch(arrayOf("*/*"))},
