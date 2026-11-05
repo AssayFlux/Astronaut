@@ -64,8 +64,8 @@ class ModelInstallStore(context: Context) {
     private val root = File(context.applicationContext.filesDir, "model-registry").apply { mkdirs() }
 
     @Synchronized
-    fun install(entry: ModelCatalogEntry, verifiedSource: File): InstalledModelVersion {
-        require(verifiedSource.isFile && verifiedSource.canRead()) { "Verified model source is missing or unreadable." }
+    fun install(\n        entry: ModelCatalogEntry,\n        verifiedSource: File,\n        ensureActive: () -> Unit = {}\n    ): InstalledModelVersion {
+        ensureActive()\n        require(verifiedSource.isFile && verifiedSource.canRead()) { "Verified model source is missing or unreadable." }
         require(entry.id.matches(Regex("^[a-z0-9][a-z0-9._-]{1,79}$"))) { "Invalid model ID." }
         require(entry.version.matches(Regex("^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"))) { "Invalid model version." }
         require(entry.fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}$")) && entry.fileName.contains('.')) { "Invalid model filename." }
@@ -92,9 +92,19 @@ class ModelInstallStore(context: Context) {
         try {
             val stagedFile = File(staging, entry.fileName)
             verifiedSource.inputStream().buffered().use { input ->
-                stagedFile.outputStream().buffered().use { output -> input.copyTo(output) }
+                stagedFile.outputStream().buffered().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        ensureActive()
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        output.write(buffer, 0, count)
+                    }
+                }
             }
+            ensureActive()
             val actual = sha256(stagedFile)
+            ensureActive()
             require(actual.equals(entry.sha256, true)) { "Model checksum mismatch during installation." }
             require(stagedFile.length() == entry.sizeBytes) { "Model size changed during installation." }
             val metadata = JSONObject()
@@ -106,6 +116,7 @@ class ModelInstallStore(context: Context) {
                 .put("license", entry.license).put("license_url", entry.licenseUrl)
                 .put("installed_at", System.currentTimeMillis())
             File(staging, "install.json").writeText(metadata.toString(2))
+            ensureActive()
             check(staging.renameTo(versionDir)) { "Could not atomically publish the installed model version." }
             val installedFile = File(versionDir, entry.fileName)
             activate(entry, installedFile, modelRoot)
