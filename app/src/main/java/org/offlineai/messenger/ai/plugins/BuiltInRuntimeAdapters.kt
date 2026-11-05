@@ -7,17 +7,22 @@ import java.io.File
 
 /** Adapter around Astronaut's existing LiteRT-LM engine; no duplicate runtime is created per request. */
 class LiteRtChatAdapter(context: Context) : AiRuntimeAdapter {
-    private val runtime = LiteRtRuntime(context.applicationContext)
+    private val appContext = context.applicationContext
+    private val runtime = LiteRtRuntime(appContext)
     private var loadedTasks: Set<AiTask> = emptySet()
 
-    override val runtimeId: String = "litert-lm"
+    override val runtimeId: String = "litertlm"
     override val supportedFormats = setOf(ModelArtifactFormat.LITERT_LM)
     override val supportedTasks = setOf(AiTask.CHAT, AiTask.CODE, AiTask.VISION)
 
     override suspend fun load(manifest: AiModelManifest, artifact: File) {
         require(manifest.artifactFormat in supportedFormats) { "LiteRT-LM adapter requires a .litertlm artifact." }
         require(supportedTasks.containsAll(manifest.tasks)) { "LiteRT-LM adapter does not support all declared tasks." }
+        require(manifest.executionMode == ExecutionMode.ON_DEVICE) { "LiteRT-LM adapter only runs on-device artifacts." }
+        require(artifact.length() == manifest.artifactBytes) { "Manifest artifact size does not match the downloaded file." }
         require(AiModelCompatibility.verifyArtifact(artifact, manifest.sha256)) { "Model artifact is missing or its SHA-256 does not match." }
+        val compatibility = AndroidAiRuntimeEnvironment.check(appContext, manifest)
+        if (compatibility is ModelCompatibility.Rejected) error(compatibility.reasons.joinToString(" "))
         runtime.load(artifact.absolutePath, enableVision = AiTask.VISION in manifest.tasks)
         loadedTasks = manifest.tasks
     }
@@ -40,7 +45,8 @@ class LiteRtChatAdapter(context: Context) : AiRuntimeAdapter {
 }
 
 /** Adapter for the existing MiniLM-compatible ONNX embedding implementation. */
-class OnnxEmbeddingAdapter(private val vocabularyFile: File) : AiRuntimeAdapter {
+class OnnxEmbeddingAdapter(context: Context, private val vocabularyFile: File) : AiRuntimeAdapter {
+    private val appContext = context.applicationContext
     private var embedder: OnnxWordPieceEmbedder? = null
 
     override val runtimeId: String = "onnx-runtime-embeddings"
@@ -50,7 +56,11 @@ class OnnxEmbeddingAdapter(private val vocabularyFile: File) : AiRuntimeAdapter 
     override suspend fun load(manifest: AiModelManifest, artifact: File) {
         require(manifest.artifactFormat == ModelArtifactFormat.ONNX) { "ONNX adapter requires an ONNX graph." }
         require(manifest.tasks == setOf(AiTask.EMBEDDINGS)) { "This adapter currently supports embeddings only." }
+        require(manifest.executionMode == ExecutionMode.ON_DEVICE) { "ONNX embedding adapter only runs on-device artifacts." }
+        require(artifact.length() == manifest.artifactBytes) { "Manifest artifact size does not match the ONNX file." }
         require(AiModelCompatibility.verifyArtifact(artifact, manifest.sha256)) { "ONNX artifact is missing or its SHA-256 does not match." }
+        val compatibility = AndroidAiRuntimeEnvironment.check(appContext, manifest)
+        if (compatibility is ModelCompatibility.Rejected) error(compatibility.reasons.joinToString(" "))
         require(vocabularyFile.isFile) { "Import the matching WordPiece vocab.txt before loading this model." }
         embedder?.close()
         embedder = OnnxWordPieceEmbedder(
@@ -79,7 +89,7 @@ class OnnxEmbeddingAdapter(private val vocabularyFile: File) : AiRuntimeAdapter 
 object BuiltInAiRuntimeFactory {
     fun create(context: Context, embeddingVocabulary: File? = null): AiRuntimeRegistry {
         val adapters = mutableListOf<AiRuntimeAdapter>(LiteRtChatAdapter(context))
-        if (embeddingVocabulary?.isFile == true) adapters += OnnxEmbeddingAdapter(embeddingVocabulary)
+        if (embeddingVocabulary?.isFile == true) adapters += OnnxEmbeddingAdapter(context, embeddingVocabulary)
         return AiRuntimeRegistry(adapters)
     }
 }
