@@ -87,6 +87,7 @@ The application ID and version name are intentionally preserved.
 - [Model catalog, compatibility and signing](docs/MODEL_ECOSYSTEM.md)
 - [APK build and installation](docs/APK_BUILD_GUIDE.md)
 - [Release signing](docs/RELEASE_SIGNING.md)
+- [Security and privacy review](docs/SECURITY_PRIVACY.md)
 - [Offline features](docs/OFFLINE_FEATURES.md)
 - [Adding AI runtimes](docs/ADDING_AI_RUNTIMES.md)
 
