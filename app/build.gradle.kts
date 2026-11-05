@@ -8,11 +8,11 @@ android {
  namespace="org.offlineai.messenger"
  compileSdk=35
  defaultConfig {
-  applicationId="org.offlineai.messenger"
+  applicationId="org.astronaut.agi"
   minSdk=26
   targetSdk=35
-  versionCode=4
-  versionName="0.4.0"
+  versionCode=5
+  versionName="0.4.1"
   testInstrumentationRunner="androidx.test.runner.AndroidJUnitRunner"
  }
  buildFeatures { compose=true }
