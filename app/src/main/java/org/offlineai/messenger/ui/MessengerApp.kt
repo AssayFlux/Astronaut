@@ -342,7 +342,10 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
            val answer=if(onlineEnabled){
             val key=secretStore.get("online_api_key")?:error("Online API key is missing. Reconfigure Online AI.")
             OpenAiCompatibleClient(onlineBaseUrl,key,onlineModelId).complete(
-             listOf(RemoteChatMessage("user",question)),maxTokens=2048
+             listOf(
+              RemoteChatMessage("system",when(responseStyle){"concise"->"Be concise and direct.";"detailed"->"Give a detailed, structured answer with examples where useful.";else->"Give a balanced, useful answer."}),
+              RemoteChatMessage("user",question)
+             ),maxTokens=2048
             )
            }else if(selectedImage!=null&&activeModelVision){
             val prepared=withContext(Dispatchers.IO){
@@ -501,10 +504,12 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       try{
        require(url.startsWith("https://",true)){"Use an HTTPS provider URL."}
        require(model.isNotBlank()){"Enter the provider's exact model ID."}
-       require(key.length>=8){"Enter a valid API key."}
-       OpenAiCompatibleClient(url,key,model)
+       if(key.isNotBlank())require(key.length>=8){"Enter a valid API key."}
+       val effectiveKey=key.takeIf{it.isNotBlank()}?:secretStore.get("online_api_key").orEmpty()
+       require(effectiveKey.length>=8){"Enter an API key before saving the provider."}
+       OpenAiCompatibleClient(url,effectiveKey,model)
        onlinePrefs.edit().putString("base_url",url.trim()).putString("model_id",model.trim()).apply()
-       secretStore.put("online_api_key",key.trim())
+       if(key.isNotBlank())secretStore.put("online_api_key",key.trim())
        onlineBaseUrl=url.trim();onlineModelId=model.trim();onlineHasKey=true
        onlineStatus="Provider configuration saved securely. Test the connection before enabling online mode."
       }catch(error:Throwable){onlineStatus="Could not save provider: "+(error.message?:error.javaClass.simpleName)}
@@ -584,7 +589,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   OutlinedTextField(urlDraft,{urlDraft=it},modifier=Modifier.fillMaxWidth(),label={Text("Provider base URL (HTTPS)")},placeholder={Text("https://api.example.com")},singleLine=true)
   OutlinedTextField(modelDraft,{modelDraft=it},modifier=Modifier.fillMaxWidth(),label={Text("Exact model ID")},placeholder={Text("provider/model-name")},singleLine=true)
   OutlinedTextField(keyDraft,{keyDraft=it},modifier=Modifier.fillMaxWidth(),label={Text(if(hasKey)"Replace API key (leave blank to keep saved key)" else "API key")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
-  Button(onClick={onSave(urlDraft.trim(),modelDraft.trim(),keyDraft)},modifier=Modifier.fillMaxWidth(),enabled=urlDraft.startsWith("https://",true)&&modelDraft.isNotBlank()&&keyDraft.length>=8){
+  Button(onClick={onSave(urlDraft.trim(),modelDraft.trim(),keyDraft)},modifier=Modifier.fillMaxWidth(),enabled=urlDraft.startsWith("https://",true)&&modelDraft.isNotBlank()&&(keyDraft.length>=8||hasKey)){
    Icon(Icons.Default.Save,null);Spacer(Modifier.width(8.dp));Text("Save provider and encrypted API key")
   }
   Text(if(hasKey)"An API key is saved encrypted using Android Keystore." else "No API key saved.",style=MaterialTheme.typography.bodySmall,color=Muted)
