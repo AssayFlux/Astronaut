@@ -4,7 +4,7 @@
 
 GitHub Actions runs Android JVM/unit tests, Android emulator instrumentation smoke tests, and assembles/uploads a debug APK artifact. Physical installation and real-device inference/performance testing remain the owner's responsibility.
 
-The repository currently contains `gradle/wrapper/gradle-wrapper.properties` but does not contain `gradlew`, `gradlew.bat` or `gradle-wrapper.jar`. Do not run `./gradlew` or `gradlew.bat` until a complete wrapper is committed. Use an installed Gradle 8.13 distribution or Android Studio's compatible Gradle integration.
+The repository includes the Gradle 8.13 wrapper (`gradlew`, `gradlew.bat` and `gradle/wrapper/gradle-wrapper.jar`). Use the wrapper so local builds and CI use the same pinned Gradle distribution.
 
 **Application ID:** `org.astronaut.agi`  
 **Version name:** `0.1.0`  
@@ -20,7 +20,7 @@ Install:
 - JDK 17
 - Android SDK Platform 36
 - Android SDK Build-Tools 36.0.0
-- Gradle 8.13
+- Gradle 8.13 wrapper (downloads the pinned distribution on first run)
 
 Accept Android SDK licenses in Android Studio's SDK Manager (or with `sdkmanager --licenses`). Ensure `ANDROID_HOME` or `ANDROID_SDK_ROOT` points to your SDK installation and that `platform-tools` is on PATH if you plan to use `adb`.
 
@@ -28,18 +28,18 @@ Verify:
 
 ```bash
 java -version
-gradle --version
+./gradlew --version
 adb version
 ```
 
-The Java output should report version 17 and Gradle should report 8.13.
+The Java output should report version 17 and the wrapper should report Gradle 8.13.
 
 ## 2. Run unit tests
 
 From the repository root:
 
 ```bash
-gradle --no-daemon :app:testDebugUnitTest
+./gradlew --no-daemon :app:testDebugUnitTest
 ```
 
 Fix any local environment or test failure before continuing.
@@ -47,7 +47,7 @@ Fix any local environment or test failure before continuing.
 ## 3. Assemble the debug APK
 
 ```bash
-gradle --no-daemon :app:assembleDebug
+./gradlew --no-daemon :app:assembleDebug
 ```
 
 Expected output:
@@ -77,7 +77,7 @@ On Windows PowerShell, replace `grep` with `Select-String`.
 
 ## Android Studio alternative
 
-Open the repository root in Android Studio, allow Gradle sync to complete, select the `app` run configuration and the `debug` build variant, then choose **Build > Build Bundle(s) / APK(s) > Build APK(s)**. Use JDK 17 and Gradle 8.13 in the IDE's Gradle settings.
+Open the repository root in Android Studio, allow Gradle sync to complete, select the `app` run configuration and the `debug` build variant, then choose **Build > Build Bundle(s) / APK(s) > Build APK(s)**. Use JDK 17; Android Studio can use the committed Gradle wrapper.
 
 ## CI and local test coverage
 
