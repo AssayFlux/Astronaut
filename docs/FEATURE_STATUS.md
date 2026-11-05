@@ -11,7 +11,7 @@ This file distinguishes implemented code from behavior that still requires hardw
 | SQLCipher database and Keystore key management | Implemented | Test fresh install, legacy migration, interrupted migration and backup/restore |
 | LiteRT-LM model import/load/unload and local text inference | Implemented | Test supported model files, token generation, low-RAM behavior and lifecycle on device |
 | PDF, DOCX, text and image attachment extraction | Implemented | OCR accuracy and large-file behavior require device tests |
-| Image OCR and ML Kit image labels | Implemented | Not visual Q&A, captioning, chart reading or diagram reasoning |
+| Image OCR and ML Kit labels plus LiteRT-LM multimodal image input | Implemented code path | Requires a user-designated compatible multimodal .litertlm model; physical-device vision validation remains outstanding |
 | Local attachment retrieval | BM25 fallback plus optional ONNX WordPiece embeddings, hybrid cosine/BM25 ranking, encrypted persistent chunks and page labels | Requires a compatible user-imported ONNX embedding model + matching vocab; model compatibility and quality need device validation |
 | Offline speech input and TTS wrappers/UI | Implemented | Requires Android 12+ on-device recognizer and installed offline language/TTS voices |
 | SHA-256 verified HTTPS model download | Implemented | User must obtain checksum from a trusted publisher; no signed curated catalog |
@@ -31,19 +31,17 @@ This file distinguishes implemented code from behavior that still requires hardw
 
 ## Build and release
 
-- [x] Android unit-test and debug-APK GitHub Actions workflow
-- [x] Release-variant assembly validation in CI
-- [x] Manual workflow dispatch for APK builds
-- [x] Debug APK artifact upload
+- [x] Android unit-test GitHub Actions workflow (APK assembly is manual)
+- [ ] Manual debug/release APK assembly and installation by the owner
+- [ ] Production signing with owner-provided keystore and CI secrets
 - [x] Separate signed-release workflow
-- [ ] Owner-provided keystore and GitHub signing secrets
 - [ ] Physical-device test matrix and performance profiling
 - [ ] Final production security/privacy review and release sign-off
 
 ## Remaining product work (not represented as completed)
 
 1. Validate the new ONNX semantic RAG path with a known MiniLM-compatible model on physical devices; add more tokenizer/model export variants and quality benchmarks.
-2. A genuine local vision-language model integration for image Q&A, charts and diagrams.
+2. Validate the LiteRT-LM vision path with supported multimodal model artifacts; benchmark image Q&A for charts, diagrams, screenshots and photographs on target devices.
 3. Broader offline ASR/TTS model management beyond Android system speech services.
 4. Signed model catalog with compatibility metadata, provenance and automatic update policy.
 5. Adapter conversion/export into a runtime-compatible LiteRT-LM artifact.

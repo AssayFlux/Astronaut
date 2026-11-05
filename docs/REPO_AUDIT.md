@@ -21,7 +21,7 @@ This audit supersedes earlier snapshots in this file. It reflects the current `m
 | Inference | LiteRT-LM runtime for imported local `.litertlm` models | Model format/runtime compatibility and memory limits require device testing |
 | Model acquisition | Import flow and HTTPS download with SHA-256 verification | No signed curated catalog; user must trust the URL/checksum source |
 | Documents | PDF page OCR, DOCX extraction, bounded text reads | OCR does not recover all layouts/tables reliably |
-| Images | ML Kit OCR and image labels | Not image Q&A, captioning, chart/diagram reasoning or general vision-language understanding |
+| Images | ML Kit OCR and image labels plus LiteRT-LM multimodal Content.ImageFile path with bounded image preprocessing | Requires a compatible user-designated multimodal .litertlm artifact; physical-device image reasoning and memory validation remain outstanding |
 | Retrieval | BM25 fallback plus optional ONNX WordPiece embeddings, hybrid cosine/BM25 ranking, encrypted persistent chunks and source/page labels | Requires a compatible user-imported ONNX model and matching vocab; validate model compatibility, quality and device performance |
 | Voice | Android speech-recognition and TTS integration | Offline support depends on device speech services and installed offline language/voice packs |
 | Collaboration | Sequential two-model review and coordinator synthesis | Requires multiple compatible imported models; not parallel autonomous agents |
@@ -39,7 +39,7 @@ This audit supersedes earlier snapshots in this file. It reflects the current `m
 
 ## Build and test evidence
 
-- Android CI workflow runs JVM unit tests, debug APK assembly and release-variant assembly; it uploads debug and unsigned release APK artifacts.
+- Android CI workflow runs JVM unit tests only; APK assembly and installation are intentionally manual.
 - Backend CI runs pytest.
 - A successful GitHub Actions build proves compilation and the tests that ran; it does not prove offline inference, speech, migration, camera/OCR quality, thermal behavior or low-memory stability on a phone.
 - Production signing requires the owner's keystore and GitHub Actions secrets.
@@ -47,7 +47,7 @@ This audit supersedes earlier snapshots in this file. It reflects the current `m
 ## Outstanding engineering work
 
 1. Semantic RAG validation: test the new ONNX embedding path against known MiniLM-compatible exports, improve tokenizer/model coverage, add retrieval quality benchmarks and strengthen source citations.
-2. Full vision-language support: compatible local VLM runtime/model path, image-question prompt integration, image resizing/token budgeting and device-memory safeguards.
+2. Vision validation: verify supported multimodal .litertlm artifacts, benchmark image Q&A quality, and measure memory/thermal behavior on target devices.
 3. Offline voice independence: managed ASR/TTS model assets and explicit offline-engine availability checks instead of relying solely on system speech services.
 4. Model ecosystem: signed catalog, provenance, runtime compatibility metadata, model license display, safe updates and rollback.
 5. Training-to-mobile pipeline: architecture-aware LoRA targets, evaluation, adapter merge/conversion, quantization and validated LiteRT-LM export.

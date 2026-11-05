@@ -3,6 +3,8 @@ package org.offlineai.messenger.ai
 import android.content.Context
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.Content
+import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -27,16 +29,26 @@ class LiteRtRuntime(context: Context) : Closeable {
     private var engine: Engine? = null
     private var closed = false
 
-    suspend fun load(modelPath: String) = withContext(dispatcher) {
+    suspend fun load(modelPath: String, enableVision: Boolean = false) = withContext(dispatcher) {
         check(!closed) { "Runtime is closed" }
         closeEngineOnWorker()
         val file = File(modelPath)
         require(file.isFile && file.canRead()) { "Model file is missing or unreadable" }
-        val candidate = Engine(EngineConfig(
-            modelPath = file.absolutePath,
-            backend = Backend.CPU(),
-            cacheDir = cacheDir.absolutePath
-        ))
+        val config = if (enableVision) {
+            EngineConfig(
+                modelPath = file.absolutePath,
+                backend = Backend.CPU(),
+                visionBackend = Backend.CPU(),
+                cacheDir = cacheDir.absolutePath
+            )
+        } else {
+            EngineConfig(
+                modelPath = file.absolutePath,
+                backend = Backend.CPU(),
+                cacheDir = cacheDir.absolutePath
+            )
+        }
+        val candidate = Engine(config)
         try {
             candidate.initialize()
             engine = candidate
@@ -54,6 +66,33 @@ class LiteRtRuntime(context: Context) : Closeable {
         try {
             buildString {
                 session.sendMessageAsync(prompt).collect { chunk -> append(chunk.toString()) }
+            }.trim()
+        } finally {
+            runCatching { session.close() }
+        }
+    }
+
+    /**
+     * Sends a real image file to a model explicitly marked as vision-capable.
+     * The model must support LiteRT-LM multimodal Content.ImageFile input.
+     */
+    suspend fun generateWithImage(imagePath: String, prompt: String): String = withContext(dispatcher) {
+        check(!closed) { "Runtime is closed" }
+        require(prompt.isNotBlank()) { "Prompt cannot be empty" }
+        val image = File(imagePath)
+        require(image.isFile && image.canRead() && image.length() > 0L) {
+            "Prepared image is missing or unreadable"
+        }
+        val activeEngine = engine ?: error("Load a vision-capable model before asking about an image")
+        val session: Conversation = activeEngine.createConversation()
+        try {
+            buildString {
+                session.sendMessageAsync(
+                    Contents.of(
+                        Content.ImageFile(image.absolutePath),
+                        Content.Text(prompt)
+                    )
+                ).collect { chunk -> append(chunk.toString()) }
             }.trim()
         } finally {
             runCatching { session.close() }

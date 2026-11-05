@@ -1,18 +1,12 @@
 # Build and install an Astronaut APK
 
-## Recommended: GitHub Actions
+## CI versus manual APK testing
 
-The repository does not currently commit the Gradle wrapper scripts, so the reproducible path for a user without a local Gradle installation is the GitHub Actions workflow.
+GitHub Actions runs Android JVM/unit tests only. It does not assemble or upload an APK. APK assembly and installation are intentionally left to the owner for manual testing after the implementation steps are complete.
 
-1. Open [Actions](https://github.com/AssayFlux/Astronaut/actions).
-2. Choose **Android build**.
-3. Select **Run workflow** (or push a branch / open a pull request targeting `main`).
-4. Wait for the Android job to complete successfully.
-5. Open that run and find **Artifacts**.
-6. Download `astronaut-debug-apk` and unzip it.
-7. Install `app-debug.apk` on the Android device.
+The repository does not currently commit the Gradle wrapper scripts, so install JDK 17, Android SDK platform 36, build-tools 36.0.0 and Gradle 8.13 before running the local commands below.
 
-If Android blocks installation, allow installation from the file manager/browser used to open the APK. The app ID is `org.astronaut.agi`.
+The app ID is `org.astronaut.agi`.
 
 ## Local build
 
