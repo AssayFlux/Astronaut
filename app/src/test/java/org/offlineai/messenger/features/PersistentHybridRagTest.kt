@@ -65,6 +65,10 @@ class PersistentHybridRagTest {
             .indexDocument("private.txt", "A cat is mentioned here.")
         val otherConversation = PersistentHybridRag(dao, FakeEmbedder(), scopeId = "private-chat-B")
         assertTrue(otherConversation.search("feline").isEmpty())
+        otherConversation.indexDocument("private.txt", "A dog is mentioned in a different private chat.")
+        assertEquals("A cat is mentioned here.", PersistentHybridRag(dao, FakeEmbedder(), scopeId = "private-chat-A")
+            .search("feline").first().chunk.text)
+        assertTrue(otherConversation.search("canine").isNotEmpty())
     }
 
     @Test fun cosineSimilarityHandlesZeroAndOrthogonalVectors() {
