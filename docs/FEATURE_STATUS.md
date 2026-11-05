@@ -15,7 +15,7 @@ This file distinguishes implemented code from behavior that still requires hardw
 | Local attachment retrieval | BM25 fallback plus optional ONNX WordPiece embeddings, hybrid cosine/BM25 ranking, encrypted persistent chunks and page labels | Requires a compatible user-imported ONNX embedding model + matching vocab; model compatibility and quality need device validation |
 | Offline speech input/output, language-pack discovery/download controls (Android 13+), and offline TTS voice selection | Implemented code path | Platform speech provider and local packs vary by OEM; physical airplane-mode and voice-quality validation remain outstanding |
 | SHA-256 verified HTTPS model download | Implemented with persistent Range resume and checksum verification | Resume depends on server Range support; interrupted and resumed transfers still need device/network testing |
-| Signed model catalog, device compatibility checks, immutable versioned install store | Implemented and connected to Models UI; Ed25519 verification uses an API 26-compatible provider | Publisher must generate/protect a real signing key and configure Gradle properties; rollback UI and background update checks remain; actual model runtime compatibility requires device tests |
+| Signed model catalog, device compatibility checks, immutable versioned install store | Implemented and connected to Models UI; Ed25519 verification uses an API 26-compatible provider | Publisher must generate/protect a real signing key and configure Gradle properties; automatic background update checks remain; rollback UI is implemented but needs real-version validation; actual model runtime compatibility requires device tests |
 | Sequential two-model review | Implemented | Requires two compatible imported models; sequential execution, not parallel agents |
 | Dataset validation and training API client/UI | Implemented | Training API must be configured and reachable |
 | Developer Studio | Implemented SAF-scoped project folder browser and explicit UTF-8 text editor with bounded file sizes | Git operations, build/test orchestration and on-device shell execution are not implemented |
@@ -46,7 +46,7 @@ This file distinguishes implemented code from behavior that still requires hardw
 2. Validate the LiteRT-LM vision path with supported multimodal model artifacts; benchmark image Q&A for charts, diagrams, screenshots and photographs on target devices.
 3. Validate platform-managed offline ASR language packs and TTS voice selection on target devices; consider bundled independent ASR/TTS runtimes only if device coverage requires them.
 4. Generate and securely provision the publisher Ed25519 key, publish a signed catalog, and configure ASTRONAUT_CATALOG_URL / ASTRONAUT_CATALOG_PUBLIC_KEY for release builds.
-5. Add background catalog update checks and a rollback/version-management UI; test resumable downloads against real range-capable hosts.
+5. Add background catalog update checks; validate the implemented install/rollback UI and resumable downloads against real range-capable hosts.
 6. Integrate a supported PEFT-to-LiteRT-LM converter when a compatible, licensed converter is selected; validate converted artifacts and inference.
 7. Extend Developer Studio with authenticated Git operations and remote build/test orchestration; keep command execution behind explicit approvals and a trusted build runner.
 8. Add instrumentation, migration, model compatibility and device performance tests; complete physical-device QA and release security review.

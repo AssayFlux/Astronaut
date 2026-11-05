@@ -439,7 +439,14 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       }
      }
     )
-    Section.WORKSPACE->DeveloperStudioScreen()
+    Section.WORKSPACE->WorkspaceScreen(projects,{showNewProject=true},{project->
+     scope.launch{
+      val existing=db.chatDao().latestProjectConversation(project.id)
+      val id=existing?.id?:db.chatDao().addConversation(ConversationEntity(title=project.name,workspaceProjectId=project.id))
+      selectedConversation=id
+      section=Section.CHATS
+     }
+    },{id->scope.launch{db.workspaceDao().delete(id)}})
     Section.SETTINGS->SettingsScreen(
      speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,
      {tag->try{
@@ -575,8 +582,16 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
 }
 
 @Composable private fun WorkspaceScreen(projects:List<WorkspaceProjectEntity>,onAdd:()->Unit,onOpen:(WorkspaceProjectEntity)->Unit,onDelete:(Long)->Unit){
+ var studioOpen by remember { mutableStateOf(false) }
+ if(studioOpen){
+  Column(Modifier.fillMaxSize()){
+   TextButton(onClick={studioOpen=false},modifier=Modifier.padding(start=12.dp)){Icon(Icons.Default.ArrowBack,null);Text("Back to projects")}
+   DeveloperStudioScreen(Modifier.weight(1f))
+  }
+  return
+ }
  Column(Modifier.fillMaxSize().padding(16.dp)){
-  Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Developer workspace",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Organise local projects and notes.",color=Muted)};FilledTonalButton(onClick=onAdd){Icon(Icons.Default.Add,null);Text("New")}}
+  Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Developer workspace",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold);Text("Organise local projects and notes.",color=Muted)};Column{FilledTonalButton(onClick=onAdd){Icon(Icons.Default.Add,null);Text("New")};OutlinedButton(onClick={studioOpen=true}){Icon(Icons.Default.Code,null);Text("Studio")}}}
   Spacer(Modifier.height(14.dp));if(projects.isEmpty())EmptyState("A space for your work","Create a project to keep its name and description on this device.")
   LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(projects,key={it.id}){project->Card{Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
    Icon(Icons.Default.Folder,null,tint=Green,modifier=Modifier.size(28.dp));Spacer(Modifier.width(12.dp))
