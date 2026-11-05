@@ -106,13 +106,14 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
        sending=true
        scope.launch{
         try{
+         val userMessageId=db.chatDao().addMessage(MessageEntity(conversationId=target,body=text,role="user",attachmentUri=attachment?.first?.toString(),attachmentName=attachment?.second))
          val extractedAttachment = attachment?.let { selected ->
           val reader = OfflineDocumentReader(context)
           try {
            reader.read(selected.first,context.contentResolver.getType(selected.first),displayName=selected.second).take(100_000)
           } finally { reader.close() }
          }
-         db.chatDao().addMessage(MessageEntity(conversationId=target,body=text,role="user",attachmentUri=attachment?.first?.toString(),attachmentName=attachment?.second,attachmentText=extractedAttachment))
+         if(extractedAttachment!=null) db.chatDao().updateAttachmentText(userMessageId,extractedAttachment)
          if(messages.isEmpty()&&(text.isNotEmpty()||attachment!=null)) db.chatDao().rename(target,(text.ifBlank{attachment?.second.orEmpty()}).take(42))
          if(activeModelPath==null){
           db.chatDao().addMessage(MessageEntity(conversationId=target,body="No AI model is loaded. Open Models, import a compatible .litertlm file, then tap Load model. Your message and extracted attachment text are saved on this device.",role="assistant"))
