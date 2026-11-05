@@ -1,7 +1,7 @@
 # Astronaut
 
 <p align="center">
-  <img src="Assets/Icon.svg" alt="Astronaut app icon" width="280" />
+  <img src="Assets/Icon.png" alt="Astronaut app icon" width="280" />
 </p>
 
 <h3 align="center">Private AI. On your device.</h3>
