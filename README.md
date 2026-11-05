@@ -1,98 +1,118 @@
-# Astronaut — Offline AI Messenger
+# Astronaut
 
-**Android application ID:** `org.astronaut.agi`  
-**App version:** `0.1.0` (release tag: `v0.1.0`; Android versionCode: `7`)  
-**Stack:** Kotlin, Jetpack Compose, Room + SQLCipher, LiteRT-LM, ML Kit  
-**Minimum Android:** API 26 (Android 8.0)  
-**Compile SDK:** 36 · **JDK:** 17 · **Gradle:** 8.13
+<p align="center">
+  <img src="Assets/Icon.svg" alt="Astronaut app icon" width="156" />
+</p>
 
-Astronaut is an Android-first offline AI application. The Android app performs local inference with an imported LiteRT-LM model. The optional training control plane is a separately hosted Python service; it is not embedded in the APK.
+<h3 align="center">Your privacy-first AI workspace for Android</h3>
+<p align="center">
+  <strong>Chat · Code · Understand · Work offline</strong>
+</p>
+<p align="center">
+  <a href="https://github.com/AssayFlux/Astronaut/actions"><img src="https://img.shields.io/github/actions/workflow/status/AssayFlux/Astronaut/android-build.yml?branch=main&label=Android%20CI" alt="Android CI" /></a>
+  <a href="https://github.com/AssayFlux/Astronaut/blob/main/LICENSE"><img src="https://img.shields.io/github/license/AssayFlux/Astronaut" alt="License" /></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+" />
+  <img src="https://img.shields.io/badge/version-0.1.0-6478FF" alt="Version 0.1.0" />
+  <img src="https://img.shields.io/badge/Kotlin-Android-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin" />
+</p>
 
-## Current Android capabilities
+Astronaut is an Android-first AI application built around **on-device inference, private local data, and user-controlled model selection**. Run compatible language models on your device, keep conversations in an encrypted local database, and optionally connect to an OpenAI-compatible HTTPS service when you choose.
 
-- Local chat history and workspace conversations persisted in Room.
-- SQLCipher-backed encrypted database with Android Keystore-managed key material and explicit legacy database migrations.
-- Import, store, load and unload compatible `.litertlm` models in app-private storage.
-- Local text generation through LiteRT-LM.
-- Attachment ingestion for PDF, DOCX, UTF-8 text and images.
-- On-device ML Kit OCR and image labels, with a LiteRT-LM multimodal image-input path for compatible imported models.
-- Local attachment retrieval with encrypted chunks, lexical BM25 ranking and optional ONNX WordPiece embeddings/hybrid ranking when a compatible embedding model and vocabulary are supplied.
-- Offline speech recognition through Android's on-device recognizer and locally installed TTS voices; availability depends on device services and offline language packs.
-- HTTPS model download with publisher-supplied SHA-256 verification, bounded redirects and resumable transfers when the server supports HTTP Range.
-- Sequential local multi-model review when at least two compatible local models are imported.
-- Dataset JSONL validation and a training screen for connecting to the optional training API.
-- SAF-scoped Developer Studio for browsing a user-selected project folder and editing bounded UTF-8 text files.
+> **Project status:** active development. Some model formats are catalog/import formats only until their corresponding execution runtime is integrated. See [Current capabilities](#current-capabilities-and-limitations) before selecting a model.
 
-## Important limitations
+## At a glance
 
-- No language model or embedding model is bundled in the APK. Import compatible model artifacts before using local chat or semantic retrieval.
-- Multimodal image understanding requires a compatible user-imported LiteRT-LM model; OCR and image labels are separate on-device features.
-- Offline voice depends on Android's speech provider and downloaded offline language/voice packs; OEM behavior varies.
-- Multi-model review is sequential, not parallel autonomous agents.
-- The optional training backend is a self-hosted GPU service. PEFT adapters are not directly importable LiteRT-LM models and need a separately selected/validated conversion tool.
-- Developer Studio is not a full IDE: integrated Git operations, arbitrary shell execution and remote build/test orchestration are not implemented.
-- Unit tests do not replace physical-device testing for model compatibility, offline speech, memory pressure, image understanding or SQLCipher migration behavior.
+| | |
+|---|---|
+| Android application ID | `org.astronaut.agi` |
+| Current app version | `0.1.0` (versionCode `7`) |
+| Minimum Android | Android 8.0 (API 26) |
+| Build stack | Kotlin · Jetpack Compose · Room · SQLCipher |
+| Local inference | LiteRT-LM |
+| Optional retrieval | ONNX Runtime embeddings |
+| Optional online mode | OpenAI-compatible HTTPS API |
 
-## Build the debug APK locally
+## Features
 
-### Prerequisites
+- **On-device AI chat** — import and run compatible `.litertlm` models locally.
+- **Private conversation storage** — Room database encrypted with SQLCipher and Android Keystore-managed key material.
+- **Model management** — import, verify, load and unload local model artifacts; downloads support publisher-provided SHA-256 verification.
+- **Document and image workflows** — ingest PDF, DOCX, text and image attachments; use on-device OCR and image labels, with multimodal model input when the selected model supports it.
+- **Local knowledge retrieval** — encrypted attachment chunks, BM25 ranking and optional ONNX embedding-based hybrid retrieval.
+- **Voice support** — Android on-device speech recognition and locally installed text-to-speech voices, subject to device language packs.
+- **Developer workspace** — browse and edit bounded UTF-8 files in a user-selected project folder.
+- **Optional online provider** — explicit opt-in to an OpenAI-compatible HTTPS endpoint; no silent cloud fallback.
+- **Multi-model review** — sequential comparison across multiple compatible imported local models.
+
+## Current capabilities and limitations
+
+| Capability | Status |
+|---|---|
+| Local text chat with compatible LiteRT-LM models | Available |
+| Encrypted local chat history | Available |
+| OCR and image labels | Available through ML Kit |
+| Multimodal image understanding | Requires a compatible imported model |
+| ONNX embedding retrieval | Available for supported embedding models |
+| Device speech recognition / TTS | Depends on Android provider and offline language packs |
+| OpenAI-compatible online chat | Optional; user-configured and opt-in |
+| GGUF / llama.cpp inference | Not integrated yet |
+| Offline diffusion image generation | Not integrated yet |
+| Whisper.cpp / Sherpa-ONNX inference | Not integrated yet |
+| Full IDE, shell and integrated Git | Not implemented |
+
+No model is bundled in the APK. A model file being smaller than the catalog's 15 GB artifact ceiling does **not** guarantee that it will fit in device memory or be supported by an installed runtime.
+
+## Build the Android app
+
+### Requirements
 
 - JDK 17
 - Android SDK Platform 36
 - Android SDK Build-Tools 36.0.0
 - Gradle 8.13
-- Android SDK licenses accepted
+- Accepted Android SDK licenses
 
-The repository currently contains `gradle-wrapper.properties` but does **not** contain the Gradle wrapper scripts or wrapper JAR. Therefore use an installed Gradle 8.13 command (or import the project into Android Studio with a compatible Gradle installation); `./gradlew` will not work until a complete wrapper is added.
-
-Check your Java and Gradle versions:
+The repository currently includes Gradle wrapper properties but not the wrapper scripts/JAR. Use an installed Gradle 8.13 distribution until a complete wrapper is added.
 
 ```bash
 java -version
 gradle --version
-```
-
-From the repository root, run:
-
-```bash
 gradle --no-daemon :app:testDebugUnitTest
 gradle --no-daemon :app:assembleDebug
 ```
 
-The APK is created at:
+The debug APK is generated at:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-To install on a connected Android device with USB debugging enabled:
+Install on a connected device:
 
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-In Android Studio, open the repository root, allow Gradle sync to finish, select the `app` configuration and the `debug` build variant, then use **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
+You can also open the repository root in Android Studio, sync Gradle, select the `app` configuration and `debug` variant, then choose **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
 
-## CI behavior
+## Model and privacy notes
 
-The **Android build** GitHub Actions workflow runs JVM/unit tests only. It intentionally does not assemble or upload APKs. The separate **Signed Android release** workflow assembles a signed release APK only when the owner has configured the required signing secrets.
+- Import a compatible model before using local inference; Astronaut does not bundle model weights.
+- Local conversations and imported files remain on-device unless you explicitly use an online provider or otherwise share them.
+- Online mode uses HTTPS and requires user configuration and opt-in. Review provider terms and privacy policies before sending prompts.
+- Model compatibility depends on the actual file format, runtime, tokenizer, device memory and hardware acceleration support. The artifact-size limit is not a runtime guarantee.
 
-## Signed release APK
+## Optional training backend
 
-A release signature belongs to the app owner. Create and protect your own Android keystore; never commit it to Git. Configure these GitHub Actions repository secrets before running the **Signed Android release** workflow:
+The training control plane is a separately hosted Python service, not part of the Android APK. See [backend/README.md](backend/README.md) for the FastAPI, Celery, Redis and GPU-worker setup.
 
-- `ANDROID_KEYSTORE_BASE64`: base64-encoded keystore file
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
+## CI and release signing
 
-See [docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md). Use the debug APK for initial testing; do not distribute an unsigned release as a production build.
+The **Android build** workflow runs JVM/unit tests. The **Signed Android release** workflow requires owner-managed signing secrets before it can produce a signed release APK.
 
-## Optional GPU training backend
+See [docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md). Never commit a keystore or signing passwords to the repository.
 
-See [backend/README.md](backend/README.md) for the self-hosted FastAPI + Celery + Redis setup, API-key configuration, local model directory requirements, CUDA worker setup and adapter export limitations.
-
-## Project documentation
+## Documentation
 
 - [Feature status and validation matrix](docs/FEATURE_STATUS.md)
 - [Product architecture](docs/PRODUCT_ARCHITECTURE.md)
@@ -101,3 +121,11 @@ See [backend/README.md](backend/README.md) for the self-hosted FastAPI + Celery 
 - [APK build guide](docs/APK_BUILD_GUIDE.md)
 - [Database encryption](docs/DATABASE_ENCRYPTION.md)
 - [Release signing](docs/RELEASE_SIGNING.md)
+
+## Contributing
+
+Issues and pull requests are welcome. Please include device/Android details, model format and runtime information, reproduction steps, and relevant logs when reporting a bug.
+
+## License
+
+See [LICENSE](LICENSE).

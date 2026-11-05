@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Astronaut app icon</title><desc id="desc">A friendly astronaut helmet framed by a glowing orbital ring against deep space.</desc>
+  <defs>
+    <linearGradient id="space" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#101b49"/><stop offset="1" stop-color="#030817"/></linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a855f7"/><stop offset=".52" stop-color="#22d3ee"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+    <linearGradient id="suit" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#a9c5e8"/></linearGradient>
+    <linearGradient id="visor" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#162b68"/><stop offset=".55" stop-color="#07132e"/><stop offset="1" stop-color="#050a1b"/></linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#space)"/>
+  <circle cx="256" cy="256" r="211" fill="none" stroke="url(#ring)" stroke-width="15" opacity=".95" filter="url(#glow)"/>
+  <g fill="#dbeafe" opacity=".8"><circle cx="104" cy="145" r="4"/><circle cx="399" cy="125" r="3"/><circle cx="412" cy="342" r="4"/><circle cx="119" cy="377" r="3"/></g>
+  <path d="M118 414c9-76 51-119 111-129h54c61 10 103 53 111 129v26H118z" fill="url(#suit)" stroke="#dbeafe" stroke-width="9"/>
+  <path d="M188 345l-29 91m165-91 29 91" stroke="#6d8eb9" stroke-width="13" stroke-linecap="round"/>
+  <path d="M180 213c0-81 34-131 76-131s76 50 76 131v30c0 73-38 116-76 116s-76-43-76-116z" fill="url(#suit)" stroke="#e5f2ff" stroke-width="13"/>
+  <ellipse cx="256" cy="222" rx="112" ry="99" fill="url(#visor)" stroke="#dcecff" stroke-width="17"/>
+  <ellipse cx="256" cy="222" rx="96" ry="83" fill="none" stroke="#36c9ff" stroke-width="7" opacity=".85"/>
+  <path d="M192 203c23-39 70-58 111-46" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".65"/>
+  <circle cx="145" cy="224" r="30" fill="#b9d5f5" stroke="#eaf5ff" stroke-width="9"/>
+  <circle cx="145" cy="224" r="15" fill="#1d9bea" stroke="#6ce7ff" stroke-width="6" filter="url(#glow)"/>
+  <path d="M230 414h52" stroke="#263d70" stroke-width="12" stroke-linecap="round"/>
+  <path d="M256 177l10 25 27 2-21 17 7 26-23-14-23 14 7-26-21-17 27-2z" fill="#67e8f9" opacity=".9"/>
+</svg>
