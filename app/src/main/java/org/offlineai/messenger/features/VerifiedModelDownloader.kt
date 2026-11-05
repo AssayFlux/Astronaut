@@ -26,7 +26,10 @@ class VerifiedModelDownloader(context: Context) {
     ): DownloadedModel = withContext(Dispatchers.IO) {
         require(expectedSha256.matches(Regex("[A-Fa-f0-9]{64}"))) { "Enter a valid 64-character SHA-256 checksum." }
         val safeName = requestedFileName.substringAfterLast('/').substringAfterLast('\\').replace(Regex("[^A-Za-z0-9._-]"), "_")
-        require(safeName.endsWith(".litertlm", true) && safeName.isNotBlank()) { "The model filename must end in .litertlm." }
+        val allowedExtensions = setOf(".litertlm", ".gguf", ".onnx", ".tflite", ".safetensors", ".zip", ".bin", ".ggml")
+        require(safeName.isNotBlank() && allowedExtensions.any { safeName.endsWith(it, true) }) {
+            "Unsupported model artifact extension. Supported: " + allowedExtensions.joinToString()
+        }
         var currentUrl = URL(sourceUrl)
         require(currentUrl.protocol.equals("https", true)) { "Model downloads require HTTPS." }
         val digestKey = expectedSha256.lowercase()
@@ -74,7 +77,7 @@ class VerifiedModelDownloader(context: Context) {
                 }
                 val remaining = candidate.contentLengthLong.takeIf { it >= 0 }
                 val total = remaining?.let { offset + it }?.takeIf { it > 0 }
-                if (total != null) require(total <= MAX_BYTES) { "Model exceeds the 8 GiB download limit." }
+                if (total != null) require(total <= MAX_BYTES) { "Model exceeds the 15 GB download limit." }
                 var downloaded = offset
                 candidate.inputStream.use { input ->
                     val output = (if (append) FileOutputStream(partial, true) else partial.outputStream()).buffered()
@@ -118,7 +121,7 @@ class VerifiedModelDownloader(context: Context) {
     }
 
     companion object {
-        private const val MAX_BYTES = 8L * 1024L * 1024L * 1024L
+        private const val MAX_BYTES = 15_000_000_000L
         private const val PROGRESS_INTERVAL = 512L * 1024L
     }
 }
