@@ -11,8 +11,8 @@ android {
   applicationId="org.astronaut.agi"
   minSdk=26
   targetSdk=35
-  versionCode=5
-  versionName="0.4.1"
+  versionCode=6
+  versionName="0.5.0"
   testInstrumentationRunner="androidx.test.runner.AndroidJUnitRunner"
  }
  buildFeatures { compose=true }
@@ -42,5 +42,7 @@ dependencies {
  implementation("io.coil-kt:coil-compose:2.7.0")
  implementation("androidx.media3:media3-exoplayer:1.5.1")
  implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.1")
+ implementation("com.google.mlkit:text-recognition:16.0.1")
+ implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
  testImplementation("junit:junit:4.13.2")
 }
