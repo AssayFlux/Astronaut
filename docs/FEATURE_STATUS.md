@@ -34,7 +34,7 @@ This file distinguishes implemented code from behavior that still requires hardw
 ## Build and release
 
 - [x] Gradle 8.13 wrapper scripts and wrapper JAR committed
-- [x] README branding asset and wrapper-based build instructions updated
+- [x] README references the existing `Assets/Icon.png` brand asset and documents wrapper-based builds
 - [x] Chat history selector redesigned as a compact menu
 - [x] Appearance preferences include light/dark mode and five accent colours
 - [x] Speech language choices and local voice names use readable labels
