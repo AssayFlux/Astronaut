@@ -63,3 +63,14 @@ The packaging command validates archive paths, records SHA-256 checksums for bot
 - Base models must be local directories under `ASTRONAUT_MODELS_DIR`; the trainer is offline with respect to model downloads.
 - Uploads are capped at 512 MiB; app-side JSONL preparation is capped at 20 MiB.
 - Run one GPU worker per device initially. Add quotas, TLS, audit logging, retention/cleanup, PostgreSQL, object storage and per-user authorization before multi-user deployment.
+
+## Publisher catalog signing
+
+Install the normal backend requirements, then generate a dedicated Ed25519 keypair:
+
+```bash
+python -m astronaut_api.catalog_signing generate-keypair --private-key ./secrets/catalog-private.pem --public-key ./catalog-public-key.base64
+python -m astronaut_api.catalog_signing sign --manifest ./mobile-release/manifest.json --base-download-url https://models.example.org/releases --private-key ./secrets/catalog-private.pem --output ./public/catalog.signed.json
+```
+
+Keep the private key in a protected offline secret store; never commit it or include it in the Android app. The public-key file contains the Base64 X.509 Ed25519 public key. Configure Android release builds with Gradle properties `ASTRONAUT_CATALOG_URL` and `ASTRONAUT_CATALOG_PUBLIC_KEY` (the Base64 public-key contents), preferably in an untracked local Gradle properties file or protected CI configuration. The signature covers the exact canonical UTF-8 JSON payload. The app never trusts a key supplied by the catalog itself. Key rotation requires a trusted app update.
