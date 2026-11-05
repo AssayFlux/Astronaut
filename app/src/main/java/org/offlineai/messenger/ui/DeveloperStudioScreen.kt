@@ -22,7 +22,7 @@ private data class StudioFile(val document: DocumentFile, val relativePath: Stri
 
 /** SAF-scoped editor: no broad storage permission, shell execution or implicit file writes. */
 @Composable
-fun DeveloperStudioScreen() {
+fun DeveloperStudioScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember(context) { context.getSharedPreferences("astronaut_developer_studio", 0) }
@@ -60,7 +60,7 @@ fun DeveloperStudioScreen() {
         }
     }
     LaunchedEffect(treeUri) { if (treeUri != null) refresh(treeUri) }
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Developer Studio", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         Text("Browse and edit text files in a folder you explicitly select. Files remain where they are.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
