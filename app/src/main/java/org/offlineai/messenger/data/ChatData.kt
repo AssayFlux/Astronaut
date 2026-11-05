@@ -16,6 +16,7 @@ data class WorkspaceProjectEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,v
  @Insert suspend fun addMessage(item:MessageEntity):Long
  @Query("UPDATE messages SET attachmentText=:text WHERE id=:id") suspend fun updateAttachmentText(id:Long,text:String)
  @Query("SELECT * FROM messages WHERE conversationId=:id AND attachmentText IS NOT NULL ORDER BY createdAt DESC LIMIT 5") suspend fun attachmentMessages(id:Long):List<MessageEntity>
+ @Query("SELECT * FROM conversations WHERE id=:id LIMIT 1") suspend fun conversation(id:Long):ConversationEntity?
  @Query("SELECT * FROM conversations WHERE workspaceProjectId=:projectId AND archived=0 ORDER BY createdAt DESC LIMIT 1") suspend fun latestProjectConversation(projectId:Long):ConversationEntity?
  @Query("UPDATE conversations SET title=:title WHERE id=:id") suspend fun rename(id:Long,title:String)
  @Query("DELETE FROM messages WHERE conversationId=:id") suspend fun deleteMessages(id:Long)
