@@ -22,7 +22,7 @@ class ModelCatalogClient(context: Context, private val catalogUrl: String, priva
                     val next = URL(current, connection.getHeaderField("Location") ?: error("Missing redirect location"))
                     require(next.protocol == "https") { "Catalog redirect downgraded from HTTPS." }; current = next; continue
                 }
-                require(connection.responseCode == HttpURLConnection.HTTP_OK) { "Catalog request failed: HTTP \${connection.responseCode}" }
+                require(connection.responseCode == HttpURLConnection.HTTP_OK) { "Catalog request failed: HTTP ${connection.responseCode}" }
                 val bytes = connection.inputStream.use { input ->
                     val output = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192); var total = 0
                     while (true) { val count = input.read(buffer); if (count < 0) break; total += count; require(total <= 2 * 1024 * 1024) { "Catalog exceeds 2 MiB." }; output.write(buffer, 0, count) }
