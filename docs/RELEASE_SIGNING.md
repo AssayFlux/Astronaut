@@ -1,6 +1,6 @@
 # Android release signing
 
-The repository intentionally contains no signing key. A release APK can only be produced after the owner creates a keystore and stores its values as GitHub Actions secrets.
+The repository intentionally contains no signing key. Release signing is performed by the separate **Signed Android release** GitHub Actions workflow after the owner supplies a keystore and configures repository secrets. The regular **Android build** workflow runs unit tests only; it does not build or upload APKs.
 
 ## 1. Create and back up a release keystore
 
@@ -33,10 +33,21 @@ base64 < astronaut-release.jks | tr -d '\n'
 
 ## 3. Build a signed release
 
-Run the **Signed Android release** workflow manually, or push a version tag beginning with `v`. The workflow refuses to run without all four secrets and uploads `astronaut-signed-release-apk`.
+Run the **Signed Android release** workflow manually from the Actions tab, or push a version tag beginning with `v`. For tag-triggered releases, the workflow verifies that the tag version matches Android's `versionName` (currently `0.1.0`). The workflow refuses to run without all four secrets and uploads `astronaut-signed-release-apk`.
 
-The ordinary Android CI continues to build and upload a debug APK. A green debug build is not a signed production release.
+The release workflow builds `:app:assembleRelease`; it does not run as part of ordinary unit-test CI. The release APK is intended for distribution only after physical-device QA and security review.
+
+## Local signed release build
+
+The Android Gradle configuration also accepts these environment variables:
+
+- `ANDROID_KEYSTORE_PATH`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Set all four locally, then run `gradle :app:assembleRelease`. Keep the keystore outside the repository and do not paste passwords into shell history or source files.
 
 ## Remaining release checks
 
-Before publishing, test installation/upgrade on physical devices, verify the signing certificate and application ID, review permissions and data handling, and complete the final production security review. The Room database uses SQLCipher with a Keystore-managed key and explicit legacy migrations; verify migration, recovery and backup behavior on supported Android versions before release.
+Before publishing, test fresh installation and upgrade on physical devices, verify the signing certificate and application ID, review permissions and data handling, and complete the final production security review. The Room database uses SQLCipher with a Keystore-managed key and explicit legacy migrations; verify migration, recovery and backup behavior on supported Android versions before release.
