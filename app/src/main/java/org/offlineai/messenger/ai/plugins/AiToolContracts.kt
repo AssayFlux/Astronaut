@@ -40,7 +40,7 @@ data class AiModelManifest(
 data class AiRuntimeEnvironment(
     val androidApi: Int,
     val availableMemoryBytes: Long,
-    val maximumArtifactBytes: Long = 15L * 1024L * 1024L * 1024L
+    val maximumArtifactBytes: Long = 15_000_000_000L
 )
 
 sealed class ModelCompatibility {
