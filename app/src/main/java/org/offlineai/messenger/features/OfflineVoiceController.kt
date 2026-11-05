@@ -120,7 +120,7 @@ class OfflineVoiceController(
         try {
             val service = getOrCreateRecognizer()
             service.checkRecognitionSupport(recognitionIntent(), appContext.mainExecutor,
-                object : RecognitionSupportCallback() {
+                object : RecognitionSupportCallback {
                     override fun onSupportResult(support: RecognitionSupport) {
                         callback(
                             OfflineRecognitionLanguages(
@@ -154,7 +154,7 @@ class OfflineVoiceController(
             val service = getOrCreateRecognizer()
             if (Build.VERSION.SDK_INT >= 34) {
                 service.triggerModelDownload(recognitionIntent(), appContext.mainExecutor,
-                    object : ModelDownloadListener() {
+                    object : ModelDownloadListener {
                         override fun onProgress(progress: Int) {
                             onStatus("Downloading offline speech language pack: $progress%")
                         }
