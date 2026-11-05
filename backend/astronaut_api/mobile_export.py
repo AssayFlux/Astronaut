@@ -5,7 +5,7 @@ import hashlib
 import json
 import shutil
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
@@ -35,9 +35,10 @@ def validate_adapter_archive(path: Path) -> None:
             raise ValueError("Adapter archive has an invalid entry count.")
         total = 0
         for entry in entries:
-            member = Path(entry.filename)
-            if member.is_absolute() or ".." in member.parts:
-                raise ValueError("Adapter archive contains an unsafe path.")
+            member = PurePosixPath(entry.filename)
+            mode = (entry.external_attr >> 16) & 0o170000
+            if member.is_absolute() or ".." in member.parts or "\\\\" in entry.filename or mode == 0o120000:
+                raise ValueError("Adapter archive contains an unsafe path or symbolic link.")
             if entry.file_size > MAX_MODEL_BYTES:
                 raise ValueError("Adapter archive contains an oversized entry.")
             total += entry.file_size
