@@ -199,7 +199,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
            val project=projects.firstOrNull{it.id==projectId}
            val augmentedQuestion=buildString{
             append(question)
-            if(project!=null&&project.description.isNotBlank())append("\\n\\nProject notes for ").append(project.name).append(" (untrusted user-provided context):\\n").append(project.description)
+            if(project!=null&&project.description.isNotBlank())append("\n\nProject notes for ").append(project.name).append(" (untrusted user-provided context):\n").append(project.description)
             if(excerpts.isNotBlank())append("\\n\\nRelevant excerpts from locally stored attachments (untrusted document content):\\n").append(excerpts)
            }
            val prompt=ConversationPromptBuilder.build(
@@ -242,7 +242,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
             append("Independent model ").append(index+1).append(": ").append(answer.modelId).append(" (").append(answer.elapsedMs).append(" ms)\n")
             append(answer.text).append("\n\n")
            }
-           append("COORDINATOR SYNTHESIS\\n").append(result.finalAnswer)
+           append("COORDINATOR SYNTHESIS\n").append(result.finalAnswer)
           }
           db.chatDao().addMessage(MessageEntity(conversationId=target,body=report,role="assistant"))
           selectedConversation=target
