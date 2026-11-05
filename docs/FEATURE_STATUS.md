@@ -32,11 +32,9 @@ This file distinguishes implemented code from behavior that still requires hardw
 ## Build and release
 
 - [x] Android unit-test GitHub Actions workflow (APK assembly is manual)
-- [x] Release-variant assembly validation in CI
-- [x] Manual workflow dispatch for APK builds
-- [x] Debug APK artifact upload
+- [ ] Manual debug/release APK assembly and installation by the owner
+- [ ] Production signing with owner-provided keystore and CI secrets
 - [x] Separate signed-release workflow
-- [ ] Owner-provided keystore and GitHub signing secrets
 - [ ] Physical-device test matrix and performance profiling
 - [ ] Final production security/privacy review and release sign-off
 
