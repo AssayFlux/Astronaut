@@ -33,8 +33,14 @@ class OfflineDocumentReader(private val context: Context) {
     }
 
     private suspend fun readImage(uri: Uri): String {
-        val bitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-            ?: error("Cannot decode the selected image")
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Cannot decode the selected image" }
+        var sample = 1
+        while (bounds.outWidth / sample > 2048 || bounds.outHeight / sample > 2048) sample *= 2
+        val bitmap = context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        } ?: error("Cannot decode the selected image")
         return try { recognizer.process(InputImage.fromBitmap(bitmap, 0)).await().text }
         finally { bitmap.recycle() }
     }
@@ -62,7 +68,7 @@ class OfflineDocumentReader(private val context: Context) {
     }
 
     private fun readText(uri: Uri): String = context.contentResolver.openInputStream(uri)?.use { input ->
-        BufferedReader(InputStreamReader(input, Charsets.UTF_8)).use { it.readText().take(2_000_000) }
+        BufferedReader(InputStreamReader(input, Charsets.UTF_8)).use { it.readBounded(2_000_000) }
     } ?: error("Cannot open document")
 
     private fun readDocx(uri: Uri): String {
@@ -72,7 +78,7 @@ class OfflineDocumentReader(private val context: Context) {
                 var entry = zip.nextEntry
                 while (entry != null && entry.name != "word/document.xml") entry = zip.nextEntry
                 require(entry != null) { "DOCX document.xml is missing" }
-                val xml = zip.bufferedReader(Charsets.UTF_8).readText().take(2_000_000)
+                val xml = zip.bufferedReader(Charsets.UTF_8).use { it.readBounded(2_000_000) }
                 val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance().apply {
                     setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
                     setFeature("http://xml.org/sax/features/external-general-entities", false)
@@ -90,11 +96,26 @@ class OfflineDocumentReader(private val context: Context) {
     fun close() { recognizer.close() }
 }
 
+private fun BufferedReader.readBounded(maxChars: Int): String {
+    val out = StringBuilder()
+    val buffer = CharArray(8192)
+    while (out.length < maxChars) {
+        val count = read(buffer, 0, min(buffer.size, maxChars - out.length))
+        if (count < 0) break
+        out.append(buffer, 0, count)
+    }
+    return out.toString()
+}
+
 data class KnowledgeChunk(val source: String, val index: Int, val text: String)
 data class RetrievedChunk(val chunk: KnowledgeChunk, val score: Double)
 
 /** Small, deterministic, on-device retrieval index. No embeddings or network calls are implied. */
 class LocalRagIndex(private val maxChunkChars: Int = 900, private val overlap: Int = 120) {
+    init {
+        require(maxChunkChars >= 32) { "Chunk size must be at least 32 characters." }
+        require(overlap in 0 until maxChunkChars) { "Overlap must be smaller than chunk size." }
+    }
     private val chunks = mutableListOf<KnowledgeChunk>()
 
     @Synchronized fun add(source: String, text: String) {
@@ -111,6 +132,7 @@ class LocalRagIndex(private val maxChunkChars: Int = 900, private val overlap: I
     }
 
     @Synchronized fun search(query: String, limit: Int = 5): List<RetrievedChunk> {
+        require(limit in 1..100) { "Retrieval limit must be between 1 and 100." }
         val terms = tokenize(query).toSet()
         if (terms.isEmpty()) return emptyList()
         return chunks.map { chunk ->
