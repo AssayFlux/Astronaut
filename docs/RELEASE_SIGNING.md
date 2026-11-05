@@ -1,6 +1,6 @@
 # Android release signing
 
-The repository intentionally contains no signing key. Release signing is performed by the separate **Signed Android release** GitHub Actions workflow after the owner supplies a keystore and configures repository secrets. The regular **Android build** workflow runs unit tests only; it does not build or upload APKs.
+The repository intentionally contains no signing key. Release signing is performed by the separate **Signed Android release** GitHub Actions workflow after the owner supplies a keystore and configures repository secrets. The regular **Android build** workflow runs JVM unit tests, assembles a debug APK, runs emulator instrumentation smoke tests, and uploads the debug APK artifact. The separate signed-release workflow builds and uploads the production-signed APK.
 
 ## 1. Create and back up a release keystore
 
