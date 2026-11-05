@@ -62,7 +62,7 @@ class PersistentHybridRag(
 
         val lexicalIndex = LocalRagIndex(maxChunkChars = max(128, maxChunkChars), overlap = 0)
         rows.forEach { lexicalIndex.add(it.id, it.text) }
-        val lexicalScores = lexicalIndex.search(query, limit = rows.size).associate { it.chunk.source to it.score }
+        val lexicalScores = lexicalIndex.search(query, limit = rows.size.coerceAtMost(100)).associate { it.chunk.source to it.score }
         val maxLexical = lexicalScores.values.maxOrNull()?.takeIf { it > 0.0 } ?: 1.0
 
         return rows.mapNotNull { row ->
@@ -140,6 +140,6 @@ class PersistentHybridRag(
 
     private fun stableId(modelId: String, source: String, index: Int): String {
         val input = "$modelId\u0000$source\u0000$index".toByteArray(Charsets.UTF_8)
-        return MessageDigest.getInstance("SHA-256").digest(input).joinToString("") { "%02x".format(it) }
+        return MessageDigest.getInstance("SHA-256").digest(input).joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 }
