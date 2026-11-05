@@ -24,13 +24,16 @@ class OfflineDocumentReader(private val context: Context) {
 
     suspend fun read(uri: Uri, mimeType: String?, maxPdfPages: Int = 40, displayName: String? = null): String = withContext(Dispatchers.IO) {
         val name = (displayName ?: uri.lastPathSegment).orEmpty().lowercase(Locale.ROOT)
-        when {
+        val isImage = mimeType?.startsWith("image/") == true || listOf(".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif").any(name::endsWith)
+        val extracted = when {
             mimeType == "application/pdf" || name.endsWith(".pdf") -> readPdf(uri, maxPdfPages)
-            mimeType?.startsWith("image/") == true -> readImage(uri)
+            isImage -> readImage(uri)
             name.endsWith(".docx") || mimeType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> readDocx(uri)
             mimeType?.startsWith("text/") == true || listOf(".txt", ".md", ".csv", ".json", ".xml", ".log").any(name::endsWith) -> readText(uri)
             else -> error("Unsupported attachment type. Choose PDF, image, DOCX, or a text file.")
-        }.also { require(it.isNotBlank()) { "No readable text was found in this document." } }
+        }
+        if (!isImage) require(extracted.isNotBlank()) { "No readable text was found in this document." }
+        extracted
     }
 
     private suspend fun readImage(uri: Uri): String {
