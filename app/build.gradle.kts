@@ -11,7 +11,7 @@ val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").o
 
 android {
  namespace="org.offlineai.messenger"
- compileSdk=35
+ compileSdk=36
  defaultConfig {
   applicationId="org.astronaut.agi"
   minSdk=26
