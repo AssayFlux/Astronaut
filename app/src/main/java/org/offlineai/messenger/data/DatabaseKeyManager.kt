@@ -31,13 +31,22 @@ internal object DatabaseKeyManager {
         var wrappingKey = keyStore.getKey(KEY_ALIAS, null) as? SecretKey
 
         if (encoded != null && wrappingKey != null) {
-            val blob = Base64.decode(encoded, Base64.NO_WRAP)
-            require(blob.size > IV_BYTES) { "Encrypted database key record is corrupt." }
-            val iv = blob.copyOfRange(0, IV_BYTES)
-            val ciphertext = blob.copyOfRange(IV_BYTES, blob.size)
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, wrappingKey, GCMParameterSpec(TAG_BITS, iv))
-            return cipher.doFinal(ciphertext)
+            try {
+                val blob = Base64.decode(encoded, Base64.NO_WRAP)
+                require(blob.size > IV_BYTES) { "Encrypted database key record is corrupt." }
+                val iv = blob.copyOfRange(0, IV_BYTES)
+                val ciphertext = blob.copyOfRange(IV_BYTES, blob.size)
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, wrappingKey, GCMParameterSpec(TAG_BITS, iv))
+                return cipher.doFinal(ciphertext)
+            } catch (error: Exception) {
+                check(allowCreateOrReset) {
+                    "The encrypted database key record cannot be opened. Existing encrypted chats will not be overwritten."
+                }
+                check(prefs.edit().remove(ENCRYPTED_PASSPHRASE).commit()) {
+                    "Could not reset the damaged database key record."
+                }
+            }
         }
 
         check(allowCreateOrReset) {
