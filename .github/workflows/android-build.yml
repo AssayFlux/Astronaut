@@ -1,8 +1,9 @@
 name: Android build
-on:
+'on':
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+    branches: [main]
 jobs:
   android:
     runs-on: ubuntu-latest
@@ -17,16 +18,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
-      - name: Locate Android SDK manager
-        run: |
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-          test -x "$SDKMANAGER"
-          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
       - name: Accept Android SDK licences
-        run: yes | "$SDKMANAGER" --licenses || true
+        run: yes | /usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager --licenses || true
       - name: Install Android SDK packages
-        run: "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
-      - name: Build debug APK and run unit tests
+        run: /usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Build and test debug APK
         run: gradle :app:testDebugUnitTest :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         if: success()
