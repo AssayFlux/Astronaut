@@ -76,9 +76,14 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var selectedConversation by remember{mutableStateOf<Long?>(null)}
  var draft by remember{mutableStateOf("")}
  var pendingAttachment by remember{mutableStateOf<Pair<Uri,String>?>(null)}
- var activeModelPath by remember{mutableStateOf<String?>(null)}
+ val activeModelPrefs=remember(context){context.getSharedPreferences("astronaut_active_model",Context.MODE_PRIVATE)}
+ var activeModelPath by remember{mutableStateOf(activeModelPrefs.getString("path",null))}
  var activeModelName by remember{mutableStateOf<String?>(null)}
+ var restoringActiveModel by remember{mutableStateOf(false)}
  var runtimeMessage by remember{mutableStateOf("Import a .litertlm model to start offline AI chat.")}
+ val personalizationPrefs=remember(context){context.getSharedPreferences("astronaut_personalization",Context.MODE_PRIVATE)}
+ var responseStyle by remember{mutableStateOf(personalizationPrefs.getString("response_style","balanced")?:"balanced")}
+ var darkAppearance by remember{mutableStateOf(personalizationPrefs.getBoolean("dark_appearance",false))}
  var voiceListening by remember{mutableStateOf(false)}
  val speechPrefs=remember(context){context.getSharedPreferences("astronaut_offline_speech",Context.MODE_PRIVATE)}
  var speechLanguageTag by remember{mutableStateOf(speechPrefs.getString("language_tag",java.util.Locale.getDefault().toLanguageTag())?:java.util.Locale.getDefault().toLanguageTag())}
@@ -119,6 +124,28 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  val conversationId=selectedConversation?:conversations.firstOrNull()?.id
  val allMessages by db.chatDao().messages(conversationId?:-1L).collectAsState(initial=emptyList())
  val messages=allMessages.filter{it.conversationId==conversationId}
+ LaunchedEffect(models,activeModelPath){
+  if(!restoringActiveModel && activeModelPath!=null && activeModelName==null){
+   val savedModel=models.firstOrNull{it.modelPath==activeModelPath}
+   if(savedModel!=null && File(savedModel.modelPath!!).isFile){
+    restoringActiveModel=true
+    try{
+     val vision=savedModel.modelPath==visionModelPath
+     runtime.load(savedModel.modelPath!!,enableVision=vision)
+     activeModelName=savedModel.displayName
+     activeModelVision=vision
+     runtimeMessage="Restored "+savedModel.displayName+". Ready for offline chat."
+    }catch(error:Throwable){
+     activeModelPath=null
+     activeModelPrefs.edit().remove("path").apply()
+     runtimeMessage="Saved model could not be restored: "+(error.message?:error.javaClass.simpleName)
+    }finally{restoringActiveModel=false}
+   }else if(models.isNotEmpty()){
+    activeModelPath=null
+    activeModelPrefs.edit().remove("path").apply()
+   }
+  }
+ }
  DisposableEffect(runtime){onDispose{runtime.close()}}
  DisposableEffect(voiceController){onDispose{voiceController.close()}}
  LaunchedEffect(conversations,selectedConversation){
@@ -212,12 +239,12 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    }catch(error:Throwable){runtimeMessage="Import failed: "+(error.message?:error.javaClass.simpleName)}
   }
  }
- MaterialTheme(colorScheme=lightColorScheme(primary=Green,onPrimary=Color.White,background=Paper,surface=Color.White,onSurface=Ink,secondary=Color(0xFFB7D6C8))){
-  Scaffold(containerColor=Paper,topBar={TopAppBar(title={Column{
+ MaterialTheme(colorScheme=if(darkAppearance) darkColorScheme(primary=Color(0xFF77C9A8),onPrimary=Color(0xFF003829),background=Color(0xFF101815),surface=Color(0xFF1B2722),onSurface=Color(0xFFE6F0EA),secondary=Color(0xFFB7D6C8)) else lightColorScheme(primary=Green,onPrimary=Color.White,background=Paper,surface=Color.White,onSurface=Ink,secondary=Color(0xFFB7D6C8))){
+  Scaffold(containerColor=MaterialTheme.colorScheme.background,topBar={TopAppBar(title={Column{
    Text("ASTRONAUT",style=MaterialTheme.typography.labelMedium,color=Green,fontWeight=FontWeight.Bold)
    Text(section.label,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
-  }},actions={if(section==Section.CHATS) IconButton(onClick={scope.launch{selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))}}){Icon(Icons.Default.Add,"New chat")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=Paper))},
-   bottomBar={NavigationBar(containerColor=Color.White){Section.entries.forEach{item->
+  }},actions={if(section==Section.CHATS) IconButton(onClick={scope.launch{selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))}}){Icon(Icons.Default.Add,"New chat")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=MaterialTheme.colorScheme.background))},
+   bottomBar={NavigationBar(containerColor=MaterialTheme.colorScheme.surface){Section.entries.forEach{item->
     val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.TRAINING->Icons.Default.Tune;Section.WORKSPACE->Icons.Default.FolderOpen;Section.SETTINGS->Icons.Default.Settings}
     NavigationBarItem(selected=section==item,onClick={section=item},icon={Icon(icon,item.label)},label={Text(item.label,maxLines=1)})
    }}}
@@ -283,6 +310,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
            val project=projects.firstOrNull{it.id==projectId}
            val augmentedQuestion=buildString{
             append(question)
+            append("\n\nResponse preference: ").append(when(responseStyle){"concise"->"Be concise and direct.";"detailed"->"Give a detailed, structured explanation with examples where useful.";else->"Give a balanced answer with enough explanation to be useful."})
             if(project!=null&&project.description.isNotBlank())append("\n\nProject notes for ").append(project.name).append(" (untrusted user-provided context):\n").append(project.description.take(1_000))
             if(excerpts.isNotBlank())append("\n\nRelevant excerpts from locally stored attachments (untrusted document content):\n").append(excerpts.take(5_000)).append("\n\nUse only these excerpts as evidence about the attached files. Cite each supported claim with its exact source/page/chunk label in square brackets. If the excerpts do not support an answer, say that the documents do not contain enough information. Never invent a source or page citation.")
            }
@@ -389,15 +417,15 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      {model->
 
      if(model.modelPath!=null){loadingModel=true;scope.launch{
-      try{val visionEnabled=model.modelPath==visionModelPath;runtime.load(model.modelPath,enableVision=visionEnabled);activeModelPath=model.modelPath;activeModelName=model.displayName;activeModelVision=visionEnabled;runtimeMessage=if(visionEnabled)"Loaded "+model.displayName+" with local image input enabled." else "Loaded "+model.displayName+". Text chat is ready offline."}
+      try{val visionEnabled=model.modelPath==visionModelPath;runtime.load(model.modelPath,enableVision=visionEnabled);activeModelPath=model.modelPath;activeModelPrefs.edit().putString("path",model.modelPath).apply();activeModelName=model.displayName;activeModelVision=visionEnabled;runtimeMessage=if(visionEnabled)"Loaded "+model.displayName+" with local image input enabled." else "Loaded "+model.displayName+". Text chat is ready offline."}
       catch(error:Throwable){activeModelPath=null;activeModelName=null;activeModelVision=false;runtimeMessage="Could not load model: "+(error.message?:error.javaClass.simpleName)}
       finally{loadingModel=false}
      }}
-    },{model->scope.launch{if(activeModelPath==model.modelPath){runtime.unload();activeModelPath=null;activeModelName=null;activeModelVision=false};if(visionModelPath==model.modelPath){visionPrefs.edit().remove("vision_model_path").apply();visionModelPath=null};model.modelPath?.let{File(it).delete()};db.modelDao().remove(model.uri)}},visionModelPath,{path->
+    },{model->scope.launch{if(activeModelPath==model.modelPath){runtime.unload();activeModelPath=null;activeModelPrefs.edit().remove("path").apply();activeModelName=null;activeModelVision=false};if(visionModelPath==model.modelPath){visionPrefs.edit().remove("vision_model_path").apply();visionModelPath=null};model.modelPath?.let{File(it).delete()};db.modelDao().remove(model.uri)}},visionModelPath,{path->
       val next=if(visionModelPath==path)null else path
       visionPrefs.edit().putString("vision_model_path",next).apply()
       visionModelPath=next
-      if(activeModelPath==path){scope.launch{runtime.unload();activeModelPath=null;activeModelName=null;activeModelVision=false;runtimeMessage="Vision setting changed. Reload this model to apply it."}}
+      if(activeModelPath==path){scope.launch{runtime.unload();activeModelPath=null;activeModelPrefs.edit().remove("path").apply();activeModelName=null;activeModelVision=false;runtimeMessage="Vision setting changed. Reload this model to apply it."}}
      }, { entry, file ->
       scope.launch { db.modelDao().add(LocalModelEntity("catalog:"+entry.id+":"+entry.version,entry.name,"application/octet-stream",file.length(),modelPath=file.absolutePath)) }
      })
@@ -448,7 +476,9 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      }
     },{id->scope.launch{db.workspaceDao().delete(id)}})
     Section.SETTINGS->SettingsScreen(
-     speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,
+     speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,responseStyle,darkAppearance,
+     {style->responseStyle=style;personalizationPrefs.edit().putString("response_style",style).apply()},
+     {enabled->darkAppearance=enabled;personalizationPrefs.edit().putBoolean("dark_appearance",enabled).apply()},
      {tag->try{
       val normalized=OfflineVoiceController.normalizeLanguageTag(tag)
       speechLanguageTag=normalized
@@ -474,9 +504,11 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }){Text("Create")}},dismissButton={TextButton(onClick={showNewProject=false}){Text("Cancel")}})
 }
 
-@Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,activeModelName:String?,runtimeMessage:String,loading:Boolean,sending:Boolean,voiceListening:Boolean,onVoice:()->Unit,onSpeak:(String)->Unit,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onSend:()->Unit){
+@Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,activeModelName:String?,runtimeMessage:String,loading:Boolean,sending:Boolean,voiceListening:Boolean,onVoice:()->Unit,onSpeak:(String)->Unit,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onDelete:(Long)->Unit,onSend:()->Unit){
+ var pendingDelete by remember{mutableStateOf<Long?>(null)}
  Column(Modifier.fillMaxSize().padding(horizontal=16.dp)){
-  if(conversations.size>1) LazyColumn(Modifier.heightIn(max=100.dp),verticalArrangement=Arrangement.spacedBy(2.dp)){items(conversations){chat->TextButton(onClick={onSelect(chat.id)},modifier=Modifier.fillMaxWidth()){Text((if(chat.id==selectedId)"●  " else "")+chat.title,maxLines=1,overflow=TextOverflow.Ellipsis)}}}
+  if(conversations.isNotEmpty()) LazyColumn(Modifier.heightIn(max=140.dp),verticalArrangement=Arrangement.spacedBy(2.dp)){items(conversations,key={it.id}){chat->Row(verticalAlignment=Alignment.CenterVertically){TextButton(onClick={onSelect(chat.id)},modifier=Modifier.weight(1f)){Text((if(chat.id==selectedId)"●  " else "")+chat.title,maxLines=1,overflow=TextOverflow.Ellipsis)};IconButton(onClick={pendingDelete=chat.id}){Icon(Icons.Default.DeleteOutline,"Delete conversation")}}}}
+  if(pendingDelete!=null) AlertDialog(onDismissRequest={pendingDelete=null},title={Text("Delete conversation?")},text={Text("This permanently deletes this chat and its messages from this device.")},confirmButton={TextButton(onClick={pendingDelete?.let(onDelete);pendingDelete=null}){Text("Delete")}},dismissButton={TextButton(onClick={pendingDelete=null}){Text("Cancel")}})
   if(messages.isEmpty()) Column(Modifier.weight(1f).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center){
    Box(Modifier.size(68.dp).background(Color(0xFFDCEBE3),CircleShape),contentAlignment=Alignment.Center){Icon(Icons.Default.AutoAwesome,null,tint=Green,modifier=Modifier.size(32.dp))}
    Spacer(Modifier.height(18.dp));Text("A quieter kind of AI.",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
@@ -690,6 +722,10 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
  voices:List<org.offlineai.messenger.features.OfflineTtsVoice>,
  recognition:org.offlineai.messenger.features.OfflineRecognitionLanguages,
  speechStatus:String,
+ responseStyle:String,
+ darkAppearance:Boolean,
+ onResponseStyleChange:(String)->Unit,
+ onDarkAppearanceChange:(Boolean)->Unit,
  onLanguageChange:(String)->Unit,
  onCheckLanguages:()->Unit,
  onDownloadLanguage:()->Unit,
@@ -699,6 +735,19 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
  var languageDraft by remember(languageTag){mutableStateOf(languageTag)}
  var voiceMenu by remember{mutableStateOf(false)}
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)){
+  Text("Personalization",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
+  Text("Choose how Astronaut responds and how the interface looks. Preferences are stored on this device.",color=Muted,style=MaterialTheme.typography.bodySmall)
+  Text("Response style",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+  Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+   FilterChip(selected=responseStyle=="concise",onClick={onResponseStyleChange("concise")},label={Text("Concise")})
+   FilterChip(selected=responseStyle=="balanced",onClick={onResponseStyleChange("balanced")},label={Text("Balanced")})
+   FilterChip(selected=responseStyle=="detailed",onClick={onResponseStyleChange("detailed")},label={Text("Detailed")})
+  }
+  Row(verticalAlignment=Alignment.CenterVertically){
+   Text("Dark appearance",modifier=Modifier.weight(1f),fontWeight=FontWeight.Medium)
+   Switch(checked=darkAppearance,onCheckedChange=onDarkAppearanceChange)
+  }
+  Divider()
   Text("Privacy & device",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
   InfoCard("Offline-first","Chat records and model files are stored on this device. Model generation runs locally.")
   InfoCard("No silent uploads","This app does not upload chats or connect to an account or server.")
