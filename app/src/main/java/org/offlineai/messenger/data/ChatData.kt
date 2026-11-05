@@ -2,7 +2,7 @@ package org.offlineai.messenger.data
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 @Entity(tableName="conversations")
-data class ConversationEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,val title:String,val createdAt:Long=System.currentTimeMillis(),val archived:Boolean=false,val pinned:Boolean=false)
+data class ConversationEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,val title:String,val createdAt:Long=System.currentTimeMillis(),val archived:Boolean=false,val pinned:Boolean=false,val workspaceProjectId:Long?=null)
 @Entity(tableName="messages",indices=[Index("conversationId")])
 data class MessageEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,val conversationId:Long,val body:String,val role:String,val createdAt:Long=System.currentTimeMillis(),val status:String="complete",val attachmentUri:String?=null,val attachmentName:String?=null,val attachmentText:String?=null)
 @Entity(tableName="local_models")
@@ -16,6 +16,7 @@ data class WorkspaceProjectEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,v
  @Insert suspend fun addMessage(item:MessageEntity):Long
  @Query("UPDATE messages SET attachmentText=:text WHERE id=:id") suspend fun updateAttachmentText(id:Long,text:String)
  @Query("SELECT * FROM messages WHERE conversationId=:id AND attachmentText IS NOT NULL ORDER BY createdAt DESC LIMIT 5") suspend fun attachmentMessages(id:Long):List<MessageEntity>
+ @Query("SELECT * FROM conversations WHERE workspaceProjectId=:projectId AND archived=0 ORDER BY createdAt DESC LIMIT 1") suspend fun latestProjectConversation(projectId:Long):ConversationEntity?
  @Query("UPDATE conversations SET title=:title WHERE id=:id") suspend fun rename(id:Long,title:String)
  @Query("DELETE FROM messages WHERE conversationId=:id") suspend fun deleteMessages(id:Long)
  @Query("DELETE FROM conversations WHERE id=:id") suspend fun deleteConversation(id:Long)
@@ -30,5 +31,5 @@ data class WorkspaceProjectEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,v
  @Insert suspend fun add(project:WorkspaceProjectEntity):Long
  @Query("DELETE FROM workspace_projects WHERE id=:id") suspend fun delete(id:Long)
 }
-@Database(entities=[ConversationEntity::class,MessageEntity::class,LocalModelEntity::class,WorkspaceProjectEntity::class],version=4,exportSchema=false)
+@Database(entities=[ConversationEntity::class,MessageEntity::class,LocalModelEntity::class,WorkspaceProjectEntity::class],version=5,exportSchema=false)
 abstract class AppDatabase:RoomDatabase(){ abstract fun chatDao():ChatDao; abstract fun modelDao():ModelDao; abstract fun workspaceDao():WorkspaceDao }
