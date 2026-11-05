@@ -1,7 +1,7 @@
 # Astronaut
 
 <p align="center">
-  <img src="Assets/Icon.svg" alt="Astronaut app icon" width="180" />
+  <img src="Assets/astronauts-icon.jpg" alt="Astronaut — two astronauts holding hands" width="180" />
 </p>
 
 <h3 align="center">Private AI. On your device.</h3>
@@ -15,20 +15,20 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/AssayFlux/Astronaut" alt="License" /></a>
 </p>
 
-Astronaut is an Android AI workspace focused on **on-device inference, private local data, and user-controlled models**. Run supported LiteRT-LM models locally or optionally connect to an OpenAI-compatible HTTPS provider.
+Astronaut is an Android AI workspace built around **on-device inference, private local data and user-controlled models**. Run supported LiteRT-LM models locally or optionally connect to an OpenAI-compatible HTTPS provider.
 
 ## Highlights
 
-- **Offline AI chat** with imported, compatible `.litertlm` models.
-- **Private history** stored in a Room database protected by SQLCipher.
-- **Model manager** with local imports, downloads and SHA-256 verification.
-- **Files and images** with document ingestion, on-device OCR and image labels.
-- **Local retrieval** with BM25 and optional ONNX embeddings.
-- **Voice tools** using available Android speech and text-to-speech services.
-- **Developer workspace** for browsing and editing selected project files.
-- **Optional online mode** — explicit provider configuration; no silent cloud fallback.
+- Offline AI chat with compatible `.litertlm` models.
+- Local model downloads, imports and SHA-256 verification.
+- Private chat history using Room and SQLCipher.
+- Document ingestion, on-device OCR and image labels.
+- Local retrieval with BM25 and optional ONNX embeddings.
+- Voice input and text-to-speech using Android services.
+- Developer workspace for selected project files.
+- Explicitly configured online providers; no silent cloud fallback.
 
-> **Development status:** Active development. Image generation, GGUF/llama.cpp inference and a full IDE are not currently integrated. Model support depends on its format, runtime and device resources. No models are bundled in the APK.
+> **Status:** Active development. Image generation, GGUF/llama.cpp inference and a full IDE are not currently integrated. Model compatibility depends on its runtime and device resources. Models are not bundled in the APK.
 
 ## Build
 
@@ -39,15 +39,8 @@ gradle --no-daemon :app:testDebugUnitTest
 gradle --no-daemon :app:assembleDebug
 ```
 
-APK output: `app/build/outputs/apk/debug/app-debug.apk`
-
-Install on a connected device:
-
-```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-The Android application ID is `org.astronaut.agi` (version `0.1.0`). The optional Python training service is documented in [backend/README.md](backend/README.md).
+APK: `app/build/outputs/apk/debug/app-debug.apk`  
+Application ID: `org.astronaut.agi` · Version: `0.1.0`
 
 ## Documentation
 
