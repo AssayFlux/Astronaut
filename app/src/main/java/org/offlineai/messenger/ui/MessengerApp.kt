@@ -586,7 +586,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  if(studioOpen){
   Column(Modifier.fillMaxSize()){
    TextButton(onClick={studioOpen=false},modifier=Modifier.padding(start=12.dp)){Icon(Icons.Default.ArrowBack,null);Text("Back to projects")}
-   DeveloperStudioScreen()
+   DeveloperStudioScreen(Modifier.weight(1f))
   }
   return
  }
