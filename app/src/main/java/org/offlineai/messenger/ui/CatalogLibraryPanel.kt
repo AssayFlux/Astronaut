@@ -13,6 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.offlineai.messenger.BuildConfig
 import org.offlineai.messenger.features.*
@@ -29,6 +31,7 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
     var installJob by remember { mutableStateOf<Job?>(null) }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
     var downloadLabel by remember { mutableStateOf("") }
+    var finalizingInstall by remember { mutableStateOf(false) }
     var compatibility by remember { mutableStateOf<Map<String, ModelCompatibility>>(emptyMap()) }
     val configured = BuildConfig.MODEL_CATALOG_URL.isNotBlank() && BuildConfig.MODEL_CATALOG_PUBLIC_KEY.isNotBlank()
 
@@ -200,26 +203,32 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
                     }
 
                     if (thisInstalling) {
-                        LinearProgressIndicator(
-                            progress = downloadProgress,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Text(downloadLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        OutlinedButton(
-                            onClick = {
-                                status = "Download cancelled. Any verified partial transfer remains private and can be resumed."
-                                installJob?.cancel()
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Cancel download")
+                        if (finalizingInstall) {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Text("Verifying and installing the completed download…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            LinearProgressIndicator(
+                                progress = downloadProgress,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(downloadLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            OutlinedButton(
+                                onClick = {
+                                    status = "Download cancelled. Any partial transfer remains private and can be resumed."
+                                    installJob?.cancel()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Cancel download")
+                            }
                         }
                     } else {
                         Button(
                             onClick = {
                                 installing = entry.id
+                                finalizingInstall = false
                                 downloadProgress = 0f
                                 downloadLabel = "Preparing secure download…"
                                 installJob = scope.launch {
@@ -238,10 +247,14 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
                                                 "${formatCatalogSize(bytes)} downloaded"
                                             }
                                         }
+                                        finalizingInstall = true
                                         val store = ModelInstallStore(context)
-                                        val installed = store.install(entry, downloaded.file)
+                                        val installed = withContext(Dispatchers.IO) {
+                                            store.install(entry, downloaded.file)
+                                        }
+                                        val currentVersions = withContext(Dispatchers.IO) { store.list(entry.id) }
                                         installedVersions.clear()
-                                        installedVersions.addAll(store.list(entry.id))
+                                        installedVersions.addAll(currentVersions)
                                         onInstalled(entry, installed.file)
                                         status = "Installed ${entry.name} ${entry.version}; SHA-256 verified."
                                     } catch (cancelled: CancellationException) {
@@ -253,6 +266,7 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
                                         installJob = null
                                         downloadProgress = 0f
                                         downloadLabel = ""
+                                        finalizingInstall = false
                                     }
                                 }
                             },
