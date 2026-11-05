@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.StatFs
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -239,13 +240,35 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    try{
     val doc=DocumentFile.fromSingleUri(context,uri)
     val name=doc?.name?: "local-model.litertlm"
-    require(name.endsWith(".litertlm",true)){"Choose a .litertlm model file"}
+    val supportedExtensions=listOf(".litertlm",".gguf",".onnx",".tflite",".safetensors",".zip",".bin",".ggml")
+    require(supportedExtensions.any{name.endsWith(it,true)}){"Choose a supported AI artifact: "+supportedExtensions.joinToString()}
+    val sourceSize=doc?.length()?:-1L
+    require(sourceSize in 1..15_000_000_000L){"Artifact must have a known size between 1 byte and 15 GB."}
+    val available=StatFs(context.filesDir.absolutePath).availableBytes
+    require(available>=sourceSize+512L*1024L*1024L){"Not enough free storage. Keep at least 512 MiB free after importing the artifact."}
     val modelDir=File(context.filesDir,"models").apply{mkdirs()}
     val safeName=name.replace(Regex("[^A-Za-z0-9._-]"),"_")
     val target=File(modelDir,UUID.randomUUID().toString()+"-"+safeName)
-    context.contentResolver.openInputStream(uri)?.use{input->target.outputStream().use{output->input.copyTo(output)}}?:error("Cannot read selected file")
-    db.modelDao().add(LocalModelEntity(uri.toString(),name,context.contentResolver.getType(uri),target.length(),modelPath=target.absolutePath))
-    runtimeMessage="Imported $name. Tap Load model to activate it."
+    try{
+     withContext(Dispatchers.IO){
+      context.contentResolver.openInputStream(uri)?.use{input->target.outputStream().buffered().use{output->
+       val buffer=ByteArray(64*1024);var copied=0L
+       while(true){val count=input.read(buffer);if(count<0)break;copied+=count;require(copied<=15_000_000_000L){"Artifact exceeds the 15 GB import limit."};output.write(buffer,0,count)}
+      }}?:error("Cannot read selected file")
+     }
+     require(target.length()==sourceSize){"Imported artifact size does not match the source document."}
+     db.modelDao().add(LocalModelEntity(uri.toString(),name,context.contentResolver.getType(uri),target.length(),modelPath=target.absolutePath))
+     if(name.endsWith(".onnx",true)){
+      embeddingPrefs.edit().putString("model_path",target.absolutePath).apply()
+      embeddingModelPath=target.absolutePath
+      embeddingStatus="ONNX artifact imported. Import its matching WordPiece vocab.txt to enable MiniLM semantic retrieval."
+      runtimeMessage="Imported $name. This ONNX model is configured for the embeddings pathway, not chat."
+     }else if(name.endsWith(".litertlm",true)){
+      runtimeMessage="Imported $name. Tap Load model to activate it."
+     }else{
+      runtimeMessage="Imported $name. Artifact is stored and checksum-verified only when downloaded with SHA-256; its runtime is not bundled yet, so inference is disabled."
+     }
+    }catch(error:Throwable){target.delete();throw error}
    }catch(error:Throwable){runtimeMessage="Import failed: "+(error.message?:error.javaClass.simpleName)}
   }
  }
@@ -431,7 +454,12 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
          }
          db.modelDao().add(LocalModelEntity("sha256:"+result.sha256,name,"application/octet-stream",result.bytes,modelPath=result.file.absolutePath))
          downloadStatus="Verified SHA-256 "+result.sha256.take(16)+"…"
-         runtimeMessage="Downloaded and verified "+name+". Tap Load model to activate it."
+         if(name.endsWith(".onnx",true)){
+          embeddingPrefs.edit().putString("model_path",result.file.absolutePath).apply()
+          embeddingModelPath=result.file.absolutePath
+          embeddingStatus="ONNX artifact downloaded and verified. Import its matching vocab.txt to enable MiniLM semantic retrieval."
+          runtimeMessage="Downloaded and verified "+name+". Configured as an ONNX embedding artifact, not a chat model."
+         }else runtimeMessage="Downloaded and verified "+name+". Tap Load model only if its compatible runtime is bundled."
         }catch(error:Throwable){downloadStatus="Download failed: "+(error.message?:error.javaClass.simpleName)}
         finally{downloadingModel=false}
        }
@@ -450,7 +478,21 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       visionModelPath=next
       if(activeModelPath==path){scope.launch{runtime.unload();activeModelPath=null;activeModelPrefs.edit().remove("path").apply();activeModelName=null;activeModelVision=false;runtimeMessage="Vision setting changed. Reload this model to apply it."}}
      }, { entry, file ->
-      scope.launch { db.modelDao().add(LocalModelEntity("catalog:"+entry.id+":"+entry.version,entry.name,"application/octet-stream",file.length(),modelPath=file.absolutePath)) }
+      scope.launch {
+       db.modelDao().add(LocalModelEntity("catalog:"+entry.id+":"+entry.version,entry.name,"application/octet-stream",file.length(),modelPath=file.absolutePath))
+       if(entry.format=="onnx" && entry.capabilities.contains(org.offlineai.messenger.features.ModelCapability.EMBEDDING)){
+        embeddingPrefs.edit().putString("model_path",file.absolutePath).apply()
+        embeddingModelPath=file.absolutePath
+        val vocab=embeddingVocabPath?.let(::File)
+        if(vocab?.isFile==true){
+         embeddingStatus="Validating catalog ONNX embedding model…"
+         try{
+          withContext(Dispatchers.IO){OnnxWordPieceEmbedder(file,vocab,entry.id+":"+file.length()+":"+vocab.length()).use{it.embed("Astronaut catalog embedding validation")}}
+          embeddingStatus="Semantic retrieval ready · "+entry.name
+         }catch(error:Throwable){embeddingStatus="Catalog ONNX model needs a compatible vocab or tensor layout: "+(error.message?:error.javaClass.simpleName)}
+        }else embeddingStatus="ONNX embedding model installed. Import its matching vocab.txt to enable semantic retrieval."
+       }
+      }
      })
     Section.TRAINING->TrainingLabScreen(
      datasetName,datasetReport,datasetStatus,datasetBusy,trainingJob,trainingStatus,trainingBusy,
@@ -589,7 +631,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   OutlinedTextField(urlDraft,{urlDraft=it},modifier=Modifier.fillMaxWidth(),label={Text("Provider base URL (HTTPS)")},placeholder={Text("https://api.example.com")},singleLine=true)
   OutlinedTextField(modelDraft,{modelDraft=it},modifier=Modifier.fillMaxWidth(),label={Text("Exact model ID")},placeholder={Text("provider/model-name")},singleLine=true)
   OutlinedTextField(keyDraft,{keyDraft=it},modifier=Modifier.fillMaxWidth(),label={Text(if(hasKey)"Replace API key (leave blank to keep saved key)" else "API key")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
-  Button(onClick={onSave(urlDraft.trim(),modelDraft.trim(),keyDraft)},modifier=Modifier.fillMaxWidth(),enabled=urlDraft.startsWith("https://",true)&&modelDraft.isNotBlank()&&(keyDraft.length>=8||hasKey)){
+  Button(onClick={onSave(urlDraft.trim(),modelDraft.trim(),keyDraft);keyDraft=""},modifier=Modifier.fillMaxWidth(),enabled=urlDraft.startsWith("https://",true)&&modelDraft.isNotBlank()&&(keyDraft.length>=8||hasKey)){
    Icon(Icons.Default.Save,null);Spacer(Modifier.width(8.dp));Text("Save provider and encrypted API key")
   }
   Text(if(hasKey)"An API key is saved encrypted using Android Keystore." else "No API key saved.",style=MaterialTheme.typography.bodySmall,color=Muted)
@@ -650,10 +692,14 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var showCatalog by remember { mutableStateOf(false) }
  Column(Modifier.fillMaxSize().padding(16.dp)){
   Text("On-device model library",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
-  Text("Import a .litertlm model. Model files stay in app-private storage and are not included in the APK.",color=Muted)
+  Text("Import an AI model artifact. Model files stay in app-private storage and are not included in the APK.",color=Muted)
+  Card{Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
+   Text("Runtime availability",fontWeight=FontWeight.SemiBold)
+   Text("Ready: LiteRT-LM chat/vision and ONNX MiniLM embeddings (with matching vocab.txt). GGUF/llama.cpp, diffusion image generation and dedicated Whisper/Sherpa engines are not bundled yet; their downloads are stored but cannot be loaded until the runtime is added.",style=MaterialTheme.typography.bodySmall,color=Muted)
+  }}
   OutlinedButton(onClick={showCatalog=true},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Verified,null);Spacer(Modifier.width(8.dp));Text("Browse verified model catalog")}
   if(showCatalog) AlertDialog(onDismissRequest={showCatalog=false},title={Text("Verified model catalog")},text={Column(Modifier.heightIn(max=560.dp).verticalScroll(rememberScrollState())){CatalogLibraryPanel(onCatalogInstalled)}},confirmButton={TextButton(onClick={showCatalog=false}){Text("Close")}})
-  Spacer(Modifier.height(14.dp));Button(onClick=onImport,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import .litertlm model")}
+  Spacer(Modifier.height(14.dp));Button(onClick=onImport,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import AI model artifact")}
   Spacer(Modifier.height(18.dp))
   Text("Semantic document search",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
   Text("Optional local embedding model. Use a MiniLM-compatible ONNX export with input_ids and attention_mask (int64), plus its matching WordPiece vocab.txt. Files stay on this device.",color=Muted,style=MaterialTheme.typography.bodySmall)
@@ -667,10 +713,10 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   var downloadName by remember{mutableStateOf("model.litertlm")}
   Spacer(Modifier.height(16.dp))
   Text("Download and verify",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
-  Text("Paste an HTTPS model URL and the SHA-256 published by its source. Downloads are rejected if the checksum does not match.",color=Muted,style=MaterialTheme.typography.bodySmall)
+  Text("Download supported artifacts (.litertlm, .gguf, .onnx, .tflite, .safetensors, .zip, .bin or .ggml) over HTTPS. The source SHA-256 is mandatory. A downloaded file can run only when its runtime adapter is bundled.",color=Muted,style=MaterialTheme.typography.bodySmall)
   OutlinedTextField(downloadUrl,{downloadUrl=it},modifier=Modifier.fillMaxWidth(),label={Text("HTTPS download URL")},singleLine=true,enabled=!downloading)
   OutlinedTextField(downloadSha,{downloadSha=it},modifier=Modifier.fillMaxWidth(),label={Text("SHA-256 checksum (64 hex characters)")},singleLine=true,enabled=!downloading)
-  OutlinedTextField(downloadName,{downloadName=it},modifier=Modifier.fillMaxWidth(),label={Text("Filename (.litertlm)")},singleLine=true,enabled=!downloading)
+  OutlinedTextField(downloadName,{downloadName=it},modifier=Modifier.fillMaxWidth(),label={Text("Filename with supported extension")},singleLine=true,enabled=!downloading)
   Button(onClick={onDownload(downloadUrl.trim(),downloadSha.trim(),downloadName.trim())},modifier=Modifier.fillMaxWidth(),enabled=!downloading&&downloadUrl.startsWith("https://")&&downloadSha.matches(Regex("[A-Fa-f0-9]{64}"))&&downloadName.matches(Regex("(?i).+\\.(litertlm|gguf|onnx|tflite|safetensors|zip|bin|ggml)"))){if(downloading)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)else Icon(Icons.Default.Download,null);Spacer(Modifier.width(8.dp));Text(if(downloading)"Downloading…" else "Download and verify")}
   if(downloading&&downloadProgress>0f)LinearProgressIndicator(progress=downloadProgress,modifier=Modifier.fillMaxWidth())
   if(downloadStatus.isNotBlank())Text(downloadStatus,color=Green,style=MaterialTheme.typography.bodySmall)
@@ -680,16 +726,18 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   if(models.isEmpty())EmptyState("No model imported","Choose a compatible LiteRT-LM .litertlm file. A small model is best for phones.")
   LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(models,key={it.uri}){model->
    val canLoad=model.modelPath?.endsWith(".litertlm",true)==true
+   val isOnnx=model.modelPath?.endsWith(".onnx",true)==true
    Card{Column(Modifier.fillMaxWidth().padding(14.dp)){
    Text(model.displayName,fontWeight=FontWeight.SemiBold,maxLines=2,overflow=TextOverflow.Ellipsis)
    Text(formatBytes(model.sizeBytes),color=Muted,style=MaterialTheme.typography.labelSmall)
-   if(!canLoad)Text("Artifact imported. Its declared runtime is not bundled in this build, so loading is disabled rather than sent to an incompatible engine.",color=Muted,style=MaterialTheme.typography.bodySmall)
+   if(isOnnx)Text("ONNX artifact. Embedding models need their matching vocab.txt and are used by semantic retrieval, not the chat engine.",color=Muted,style=MaterialTheme.typography.bodySmall)
+   else if(!canLoad)Text("Artifact imported. Its declared runtime is not bundled in this build, so loading is disabled rather than sent to an incompatible engine.",color=Muted,style=MaterialTheme.typography.bodySmall)
    Text("Vision input is available only for compatible multimodal .litertlm models. Enable this only when the model publisher confirms image support.",color=Muted,style=MaterialTheme.typography.bodySmall)
    Row(verticalAlignment=Alignment.CenterVertically){
     if(activePath==model.modelPath)Text("ACTIVE · "+activeName,color=Green,modifier=Modifier.weight(1f),style=MaterialTheme.typography.labelSmall) else Spacer(Modifier.weight(1f))
     TextButton(onClick={model.modelPath?.let(onEnableVision)?:Unit},enabled=model.modelPath!=null){Text(if(model.modelPath==visionModelPath)"Vision enabled" else "Enable vision")}
     TextButton(onClick={onRemove(model)}){Text("Remove")}
-    Button(onClick={onLoad(model)},enabled=!loading&&canLoad){Text(if(activePath==model.modelPath)"Reload" else if(canLoad)"Load model" else "Runtime unavailable")}
+    Button(onClick={onLoad(model)},enabled=!loading&&canLoad){Text(if(activePath==model.modelPath)"Reload" else if(canLoad)"Load model" else if(isOnnx)"Embedding artifact" else "Runtime unavailable")}
    }
   }} }}
  }
