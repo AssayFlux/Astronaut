@@ -1,32 +1,85 @@
 # Astronaut — Offline AI Messenger
 
-Android application ID: org.astronaut.agi · Kotlin · Jetpack Compose · Room · API 26+.
+**Android application ID:** `org.astronaut.agi`  
+**Stack:** Kotlin, Jetpack Compose, Room + SQLCipher, LiteRT-LM, ML Kit  
+**Minimum Android:** API 26 (Android 8.0)  
+**Compile SDK:** 36 · **JDK:** 17 · **Gradle:** 8.13
 
-## Existing app milestone
-- Persistent local conversations and message history.
-- Import .litertlm models into app-private storage.
-- Run local text generation through Google's LiteRT-LM runtime on the CPU.
-- Load/unload an imported model from the Models screen.
-- Local project list / workspace.
+Astronaut is an Android-first offline AI application. The Android app performs local inference with an imported LiteRT-LM model. The optional training control plane is a separately hosted Python service; it is not embedded in the APK.
 
-## Offline feature services added on feat/offline-multimodal-platform
-See docs/OFFLINE_FEATURES.md and docs/FEATURE_STATUS.md.
+## Current Android capabilities
 
-The new service layer provides offline OCR-based document/image text extraction (PDF, DOCX, UTF-8 text), local lexical retrieval, Android speech recognition/TTS wrappers, verified model-download helpers, JSONL dataset inspection, and a sequential multi-provider collaboration engine.
+- Local chat history and workspace conversations persisted in Room.
+- SQLCipher-backed encrypted database with Android Keystore-managed key material and explicit legacy database migrations.
+- Import, store, load and unload compatible `.litertlm` models in app-private storage.
+- Local text generation through LiteRT-LM.
+- Attachment ingestion for PDF (page-rendered OCR), DOCX, UTF-8 text and images.
+- On-device ML Kit OCR and image-label classification. Image labels are not open-ended visual question answering.
+- Local attachment retrieval with BM25-style lexical ranking and source/chunk labels. This is not embedding/vector semantic search.
+- Offline speech recognition through Android's on-device recognizer (Android 12+ and installed offline language pack) and locally installed TTS voices.
+- HTTPS model download with publisher-supplied SHA-256 verification, bounded redirects and file-size limits.
+- Sequential local multi-model review when at least two compatible local models are imported. Models run one after another to reduce peak RAM use.
+- Dataset JSONL validation and a training screen for connecting to the optional training API.
+- Local project/workspace records and project-scoped assistant conversations.
 
-These are integration-ready services, not a claim that every capability is now exposed end-to-end in the UI. OCR is not semantic image understanding; local lexical search is not embedding-based RAG; dataset inspection is not fine-tuning; and collaboration requires multiple registered real providers.
+## Important limitations
 
-## First-run model setup
-The APK does not bundle a language model. Import a compatible .litertlm model in Astronaut > Models. Once loaded, text generation runs locally.
+- No language model is bundled in the APK. Import a compatible `.litertlm` model before using local chat.
+- The app's image feature provides OCR and object/category labels, not visual question answering, image caption generation or chart reasoning.
+- Retrieval is offline lexical BM25 ranking over stored attachment text, not neural embedding search.
+- Offline voice depends on the Android device's on-device speech service and downloaded offline voice/language packs.
+- Collaboration requires two distinct compatible local models and is sequential, not parallel autonomous agents.
+- The training backend is an optional self-hosted GPU service. It supports LoRA/QLoRA adapter training on a configured CUDA worker; exported PEFT adapters are not directly importable LiteRT-LM models and require a separate conversion/export step.
+- Workspace support is not a full IDE: there is no integrated source editor, arbitrary shell, Git client or autonomous Android build environment inside the phone app.
+- CI and unit tests cannot replace physical-device testing, especially for LiteRT model compatibility, offline speech availability, memory pressure and SQLCipher migration behavior.
 
-Recommended starter model: Qwen3-0.6B LiteRT-LM (see its Hugging Face model card and license). A 0.6B model is a starter; speed and memory use depend on the phone.
+## Build the APK
 
-## Build
-Requirements: JDK 17, Android SDK platform 35, Gradle 8.13.
+### Local build
 
-    gradle :app:testDebugUnitTest :app:assembleDebug
+Requirements: JDK 17, Android SDK platform 36 and build-tools 36.0.0, and Gradle 8.13.
 
-APK: app/build/outputs/apk/debug/app-debug.apk.
+```bash
+gradle --no-daemon :app:testDebugUnitTest
+gradle --no-daemon :app:assembleDebug
+```
 
-## Validation
-Service unit tests are included for lexical retrieval and JSONL dataset inspection. PDF OCR, speech recognition, model downloads and actual LiteRT inference still require Android runtime/device testing. No release signing or database encryption-at-rest is claimed.
+Debug APK:
+
+`app/build/outputs/apk/debug/app-debug.apk`
+
+### Build through GitHub Actions
+
+1. Open the repository's **Actions** tab.
+2. Select **Android build**.
+3. Choose **Run workflow** and select the branch.
+4. Wait for the **Unit tests and APKs** job to finish successfully.
+5. Open the run's **Artifacts** section and download `astronaut-debug-apk`.
+6. Extract the ZIP; install `app-debug.apk` on your Android device.
+
+The workflow runs unit tests, assembles the debug APK and validates the release variant. It also uploads an unsigned release artifact when Gradle produces it.
+
+## Signed release APK
+
+A release signature belongs to the app owner. Create and protect your own Android keystore; never commit it to Git. Configure these GitHub Actions repository secrets before running the **Signed Android release** workflow:
+
+- `ANDROID_KEYSTORE_BASE64`: base64-encoded keystore file
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+See [docs/RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md). Without those secrets, use the debug APK for testing; do not distribute an unsigned release as a production build.
+
+## Optional GPU training backend
+
+See [backend/README.md](backend/README.md) for the self-hosted FastAPI + Celery + Redis setup, API-key configuration, local model directory requirements, CUDA worker setup and adapter export limitations.
+
+## Project documentation
+
+- [Feature status and validation matrix](docs/FEATURE_STATUS.md)
+- [Product architecture](docs/PRODUCT_ARCHITECTURE.md)
+- [Offline feature notes](docs/OFFLINE_FEATURES.md)
+- [Backend training architecture](docs/BACKEND_TRAINING_ARCHITECTURE.md)
+- [APK build guide](docs/APK_BUILD_GUIDE.md)
+- [Database encryption](docs/DATABASE_ENCRYPTION.md)
+- [Release signing](docs/RELEASE_SIGNING.md)
