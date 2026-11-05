@@ -6,6 +6,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -13,12 +14,9 @@ import javax.net.ssl.HttpsURLConnection
 
 data class DownloadedModel(val file: File, val sha256: String, val bytes: Long)
 
-/**
- * Downloads only over HTTPS and verifies the publisher-provided SHA-256 before exposing
- * the file to the model library. Redirects are limited and may never downgrade to HTTP.
- */
+/** HTTPS downloader with persistent Range resume. Partial bytes are never exposed to inference. */
 class VerifiedModelDownloader(context: Context) {
-    private val modelDirectory = File(context.filesDir, "models").apply { mkdirs() }
+    private val modelDirectory = File(context.applicationContext.filesDir, "models").apply { mkdirs() }
 
     suspend fun download(
         sourceUrl: String,
@@ -27,45 +25,60 @@ class VerifiedModelDownloader(context: Context) {
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit = { _, _ -> }
     ): DownloadedModel = withContext(Dispatchers.IO) {
         require(expectedSha256.matches(Regex("[A-Fa-f0-9]{64}"))) { "Enter a valid 64-character SHA-256 checksum." }
-        val safeName = requestedFileName.substringAfterLast('/').substringAfterLast('\\')
-            .replace(Regex("[^A-Za-z0-9._-]"), "_")
-        require(safeName.endsWith(".litertlm", ignoreCase = true)) { "The downloaded model must use the .litertlm extension." }
-        require(safeName.isNotBlank()) { "A model filename is required." }
-
+        val safeName = requestedFileName.substringAfterLast('/').substringAfterLast('\\').replace(Regex("[^A-Za-z0-9._-]"), "_")
+        require(safeName.endsWith(".litertlm", true) && safeName.isNotBlank()) { "The model filename must end in .litertlm." }
         var currentUrl = URL(sourceUrl)
         require(currentUrl.protocol.equals("https", true)) { "Model downloads require HTTPS." }
-        val temporary = File.createTempFile("astronaut-model-", ".part", modelDirectory)
+        val digestKey = expectedSha256.lowercase()
+        val partial = File(modelDirectory, ".$digestKey.part")
+        val target = File(modelDirectory, digestKey.take(16) + "-" + safeName)
+        if (target.isFile && sha256(target).equals(digestKey, true)) return@withContext DownloadedModel(target, digestKey, target.length())
+        if (partial.length() > MAX_BYTES) partial.delete()
+        var offset = partial.length()
+        var redirects = 0
+        var restartedAfter416 = false
         var connection: HttpsURLConnection? = null
         try {
-            var redirects = 0
             while (true) {
                 currentCoroutineContext().ensureActive()
-                val candidate = currentUrl.openConnection() as? HttpsURLConnection
-                    ?: error("Only HTTPS model download endpoints are allowed.")
+                val candidate = currentUrl.openConnection() as? HttpsURLConnection ?: error("Only HTTPS model download endpoints are allowed.")
                 connection = candidate
                 candidate.connectTimeout = 20_000
                 candidate.readTimeout = 45_000
                 candidate.instanceFollowRedirects = false
-                candidate.setRequestProperty("User-Agent", "Astronaut-Offline-AI/1.0")
+                candidate.setRequestProperty("User-Agent", "Astronaut-Offline-AI/0.1.0")
+                candidate.setRequestProperty("Accept-Encoding", "identity")
+                if (offset > 0) candidate.setRequestProperty("Range", "bytes=$offset-")
                 candidate.connect()
                 val status = candidate.responseCode
                 if (status in 300..399) {
-                    val location = candidate.getHeaderField("Location") ?: error("The server returned a redirect without a destination.")
+                    val location = candidate.getHeaderField("Location") ?: error("Redirect has no destination.")
                     require(redirects++ < 3) { "Too many model download redirects." }
                     val redirected = URL(currentUrl, location)
                     require(redirected.protocol.equals("https", true)) { "Redirects to non-HTTPS destinations are blocked." }
-                    candidate.disconnect()
-                    connection = null
-                    currentUrl = redirected
+                    candidate.disconnect(); connection = null; currentUrl = redirected
                     continue
                 }
-                require(status == HttpURLConnection.HTTP_OK) { "Download failed with HTTP status $status." }
-                val total = candidate.contentLengthLong.takeIf { it > 0 }
+                if (status == 416 && offset > 0 && !restartedAfter416) {
+                    candidate.disconnect(); connection = null; partial.delete(); offset = 0; restartedAfter416 = true
+                    continue
+                }
+                val append = if (offset > 0 && status == HttpURLConnection.HTTP_PARTIAL) {
+                    val contentRange = candidate.getHeaderField("Content-Range") ?: error("Server omitted Content-Range for resumed download.")
+                    require(contentRange.startsWith("bytes $offset-", true)) { "Server resumed at an unexpected byte offset." }
+                    true
+                } else {
+                    require(status == HttpURLConnection.HTTP_OK) { "Download failed with HTTP status $status." }
+                    offset = 0
+                    false
+                }
+                val remaining = candidate.contentLengthLong.takeIf { it >= 0 }
+                val total = remaining?.let { offset + it }?.takeIf { it > 0 }
                 if (total != null) require(total <= MAX_BYTES) { "Model exceeds the 8 GiB download limit." }
-                val digest = MessageDigest.getInstance("SHA-256")
-                var downloaded = 0L
+                var downloaded = offset
                 candidate.inputStream.use { input ->
-                    temporary.outputStream().buffered().use { output ->
+                    val output = (if (append) FileOutputStream(partial, true) else partial.outputStream()).buffered()
+                    output.use { sink ->
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
                             currentCoroutineContext().ensureActive()
@@ -73,8 +86,7 @@ class VerifiedModelDownloader(context: Context) {
                             if (count < 0) break
                             downloaded += count
                             require(downloaded <= MAX_BYTES) { "Model exceeds the 8 GiB download limit." }
-                            output.write(buffer, 0, count)
-                            digest.update(buffer, 0, count)
+                            sink.write(buffer, 0, count)
                             if (downloaded % PROGRESS_INTERVAL < count) {
                                 val progress = downloaded
                                 withContext(Dispatchers.Main) { onProgress(progress, total) }
@@ -82,23 +94,27 @@ class VerifiedModelDownloader(context: Context) {
                         }
                     }
                 }
-                val actual = digest.digest().joinToString("") { "%02x".format(it) }
-                require(actual.equals(expectedSha256, ignoreCase = true)) {
-                    "SHA-256 mismatch. Expected $expectedSha256 but received $actual. The file was discarded."
+                require(total == null || downloaded == total) { "Download ended early; partial bytes were retained for resume." }
+                val actual = sha256(partial)
+                if (!actual.equals(digestKey, true)) {
+                    partial.delete()
+                    error("SHA-256 mismatch. Expected $digestKey but received $actual. Partial bytes were discarded.")
                 }
-                val target = File(modelDirectory, actual.take(16) + "-" + safeName)
-                target.delete()
-                check(temporary.renameTo(target)) { "Could not move the verified model into private storage." }
+                check(partial.renameTo(target)) { "Could not publish verified model into private storage." }
                 withContext(Dispatchers.Main) { onProgress(downloaded, total ?: downloaded) }
                 return@withContext DownloadedModel(target, actual, downloaded)
             }
             error("Unreachable download state")
-        } catch (error: Throwable) {
-            temporary.delete()
-            throw error
-        } finally {
-            connection?.disconnect()
+        } finally { connection?.disconnect() }
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
         }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     companion object {
