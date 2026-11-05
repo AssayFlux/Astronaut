@@ -30,7 +30,7 @@ jobs:
       - name: Verify release tag matches Android app version
         run: |
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            APP_VERSION="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\\([^"]*\\)".*/\\1/p' app/build.gradle.kts | head -n1)"
+            APP_VERSION="$(awk -F\x27"\x27 '/versionName[[:space:]]*=/ { print $2; exit }' app/build.gradle.kts)"
             TAG_VERSION="${GITHUB_REF_NAME#v}"
             if [ -z "$APP_VERSION" ] || [ "$TAG_VERSION" != "$APP_VERSION" ]; then
               echo "::error::Release tag v$TAG_VERSION does not match app versionName $APP_VERSION"
