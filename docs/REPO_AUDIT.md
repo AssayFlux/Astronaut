@@ -1,59 +1,59 @@
 # Repository audit — 2026-11-05
 
-This audit supersedes earlier snapshots in this file. It reflects the current `main` tree inspected on 2026-11-05 and the Android/backend CI workflows. It distinguishes code presence from verified runtime behavior.
+This source audit reflects the repository state reviewed on 2026-11-05. It separates implemented code from features that still require external configuration or physical-device validation.
 
 ## Repository and release identity
 
 - Android application ID: `org.astronaut.agi`.
-- Android Gradle namespace: `org.offlineai.messenger` (internal Kotlin package namespace; it does not change the installed application ID).
-- Intended initial product release: `v0.1.0`.
-- Android `versionCode` is monotonic. It is advanced to 7 while setting `versionName` to `0.1.0`, so users with the previously built code 6 APK can install this corrected version as an upgrade. Do not reset versionCode to 1 after distributing code 6.
-- No model weights are bundled in the APK.
-- The Gradle wrapper scripts are not committed. GitHub Actions installs Gradle 8.13 explicitly; local builds need a compatible Gradle installation.
+- Android Gradle namespace: `org.offlineai.messenger` (internal Kotlin namespace; it does not change the installed application ID).
+- Product version name: `0.1.0`; Android `versionCode`: `7`. Keep the version name at `0.1.0`; versionCode must remain monotonic for upgrades.
+- Minimum Android API: 26; target API: 35; compile API: 36.
+- Model weights are not bundled in the APK.
+- Gradle wrapper scripts are not committed. CI installs Gradle 8.13 explicitly; local builds need a compatible Gradle installation.
 
-## Implemented Android capabilities
+## Implemented Android capabilities and boundaries
 
-| Area | Current implementation | Important boundary |
+| Area | Code present | Remaining boundary |
 |---|---|---|
-| UI | Jetpack Compose screens for chats, AI Hub, models, training, workspace and settings | Not a full IDE |
-| Chat | Room persistence and conversation-scoped history | Verify upgrade/restore on physical devices |
-| Local database | SQLCipher with Keystore-managed key material and explicit migrations | Device migration, recovery and backup behavior still require testing |
-| Inference | LiteRT-LM runtime for imported local `.litertlm` models | Model format/runtime compatibility and memory limits require device testing |
-| Model acquisition | Import flow and HTTPS download with SHA-256 verification | No signed curated catalog; user must trust the URL/checksum source |
-| Documents | PDF page OCR, DOCX extraction, bounded text reads | OCR does not recover all layouts/tables reliably |
-| Images | ML Kit OCR and image labels plus LiteRT-LM multimodal Content.ImageFile path with bounded image preprocessing | Requires a compatible user-designated multimodal .litertlm artifact; physical-device image reasoning and memory validation remain outstanding |
-| Retrieval | BM25 fallback plus optional ONNX WordPiece embeddings, hybrid cosine/BM25 ranking, encrypted persistent chunks and source/page labels | Requires a compatible user-imported ONNX model and matching vocab; validate model compatibility, quality and device performance |
-| Voice | Android speech-recognition and TTS integration | Offline support depends on device speech services and installed offline language/voice packs |
-| Collaboration | Sequential two-model review and coordinator synthesis | Requires multiple compatible imported models; not parallel autonomous agents |
-| Training UI | Dataset inspection and training API client/status UI | Requires separately deployed backend |
-| Workspace | Project records and project-scoped assistant conversations | No integrated source editor, Git client, shell or build/test agent |
+| UI | Jetpack Compose screens for chat, AI Hub, models, collaboration, training, workspace and settings | UI polish and accessibility review; physical-device layout validation |
+| Chat and storage | Room persistence, conversation-scoped history, SQLCipher and Keystore-managed key material | Upgrade, interrupted migration, restore and key-recovery testing |
+| Local inference | LiteRT-LM engine for local `.litertlm` models | Only compatible artifacts run; model load, memory, thermal and lifecycle behavior need device testing |
+| Model acquisition | HTTPS download, resumable Range transfers, SHA-256 verification, local import | Test interruption/resume and checksum failures against real hosts |
+| Signed model catalogue | Ed25519 signature verification, catalogue validation, device requirements, versioned installs and rollback UI | Publisher key and trusted catalogue URL/public key must be provisioned; no production catalogue is configured by default |
+| Runtime ecosystem | Runtime adapter contracts and built-in LiteRT-LM / ONNX embedding adapters | A catalogue entry or accepted file extension does not mean its runtime is installed. GGUF/llama.cpp, diffusion/MNN, Whisper and Sherpa-ONNX execution are not bundled as general inference runtimes |
+| Documents and images | PDF/DOCX/text extraction, OCR, image labels, bounded preprocessing and a LiteRT-LM multimodal image-input path | OCR layout fidelity and image Q&A require real file/model/device validation |
+| Retrieval | BM25 fallback, optional ONNX WordPiece embeddings, hybrid ranking, encrypted chunks and source/page labels | Requires a compatible embedding model and matching vocabulary; quality benchmarks and device performance remain |
+| Voice | Android speech recognition and TTS integration with offline-language/voice discovery | Actual offline support depends on OEM speech services and installed offline packs |
+| Collaboration | Sequential two-model review and coordinator synthesis | Needs two compatible models; this is not parallel autonomous-agent execution |
+| Developer Studio | User-selected SAF folder browser and bounded UTF-8 text editor | No integrated Git client, shell, build/test runner or full IDE |
+| Training | Android dataset/status client and separate FastAPI/Celery training backend | Backend must be deployed separately; PEFT adapter output is not directly importable as a `.litertlm` model |
 
-## Optional training backend
+## Backend boundaries
 
-- FastAPI control plane with API-key authentication for dataset and job endpoints.
-- JSONL upload validation, dataset hashes, job records, job status/cancellation and artifact download.
-- Optional Celery/Redis worker and CUDA-only PEFT LoRA/QLoRA training code path.
-- The first trainer hardcodes Llama-style `q_proj` and `v_proj` target modules; other model families require explicit support.
-- Training output is a PEFT adapter plus manifest. It is not a LiteRT-LM model and cannot be imported directly into the Android app.
+- FastAPI control plane includes API-key authenticated dataset/job endpoints, JSONL validation, job status/cancellation and artifact download.
+- Optional Celery/Redis worker contains a CUDA-oriented PEFT LoRA/QLoRA path.
+- The current trainer uses Llama-style `q_proj` and `v_proj` targets; other architectures need explicit target-module support and validation.
+- Mobile export packages an already-converted artifact with provenance metadata. It does not implement Google's LiteRT-LM converter or validate internal tensor semantics.
 - The backend is self-hosted and is not part of the Android APK.
 
 ## Build and test evidence
 
-- Android CI workflow runs JVM unit tests only; APK assembly and installation are intentionally manual.
+- Android CI runs JVM unit tests, assembles a debug APK and uploads that APK as a workflow artifact.
 - Backend CI runs pytest.
-- A successful GitHub Actions build proves compilation and the tests that ran; it does not prove offline inference, speech, migration, camera/OCR quality, thermal behavior or low-memory stability on a phone.
-- Production signing requires the owner's keystore and GitHub Actions secrets.
+- CI compilation and unit tests do not certify inference, speech, migrations, OCR quality, thermal behavior, low-memory stability or device-specific compatibility.
+- Production release signing requires an owner-controlled keystore and correctly provisioned CI secrets.
 
-## Outstanding engineering work
+## Remaining engineering work
 
-1. Semantic RAG validation: test the new ONNX embedding path against known MiniLM-compatible exports, improve tokenizer/model coverage, add retrieval quality benchmarks and strengthen source citations.
-2. Vision validation: verify supported multimodal .litertlm artifacts, benchmark image Q&A quality, and measure memory/thermal behavior on target devices.
-3. Offline voice independence: managed ASR/TTS model assets and explicit offline-engine availability checks instead of relying solely on system speech services.
-4. Model ecosystem: signed catalog, provenance, runtime compatibility metadata, model license display, safe updates and rollback.
-5. Training-to-mobile pipeline: architecture-aware LoRA targets, evaluation, adapter merge/conversion, quantization and validated LiteRT-LM export.
-6. Developer Studio: project file browser/editor, explicit user-approved writes, Git status/diff/commit, and controlled build/test execution.
-7. Production readiness: instrumentation tests, migration/restore tests, security/privacy review, dependency/license review, crash/performance monitoring and a physical-device matrix.
+1. Configure and publish a real signed model catalogue; protect the Ed25519 private key and document key rotation/revocation.
+2. Add Android instrumentation tests for database creation/migrations, model import/download, lifecycle and permission flows.
+3. Validate LiteRT-LM text and multimodal models on target devices; profile peak RAM, startup, token speed, battery and thermal behavior.
+4. Benchmark retrieval against a labelled query/document set; validate tokenizer compatibility and source attribution.
+5. Test airplane-mode speech recognition and TTS on supported OEMs; decide whether a bundled offline speech engine is needed for broader coverage.
+6. Complete a security/privacy and dependency-license review, including online-provider disclosure and secret handling.
+7. Extend Developer Studio only with explicit user approval for file writes and any future Git/build execution.
+8. Perform owner-run physical APK install/upgrade tests and release signing.
 
 ## Audit caveats
 
-This is a source and CI configuration audit, not a formal penetration test or a certification of runtime behavior. Treat the boundaries above as release blockers where they affect the intended product promise. Update this file when an implementation and its tests are actually merged; do not mark planned features as complete.
+This is a source/configuration review, not a penetration test or runtime certification. A supported file extension, catalogue record or code path must not be presented as proof that a particular model or feature works on a given phone. Update this audit only when implementation and validation evidence exist.
