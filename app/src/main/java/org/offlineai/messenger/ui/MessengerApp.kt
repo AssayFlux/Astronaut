@@ -77,6 +77,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  val runtime= remember{LiteRtRuntime(context)}
  val scope= rememberCoroutineScope()
  var section by remember{mutableStateOf(Section.CHATS)}
+ var moreNavigationExpanded by remember{mutableStateOf(false)}
  var selectedConversation by remember{mutableStateOf<Long?>(null)}
  var draft by remember{mutableStateOf("")}
  var pendingAttachment by remember{mutableStateOf<Pair<Uri,String>?>(null)}
@@ -277,10 +278,22 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    Text("ASTRONAUT",style=MaterialTheme.typography.labelMedium,color=Green,fontWeight=FontWeight.Bold)
    Text(section.label,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
   }},actions={if(section==Section.CHATS) IconButton(onClick={scope.launch{selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))}}){Icon(Icons.Default.Add,"New chat")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=MaterialTheme.colorScheme.background))},
-   bottomBar={NavigationBar(containerColor=MaterialTheme.colorScheme.surface){Section.entries.forEach{item->
-    val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.TRAINING->Icons.Default.Tune;Section.WORKSPACE->Icons.Default.FolderOpen;Section.ONLINE_AI->Icons.Default.Cloud;Section.SETTINGS->Icons.Default.Settings}
-    NavigationBarItem(selected=section==item,onClick={section=item},icon={Icon(icon,item.label)},label={Text(item.label,maxLines=1)})
-   }}}
+   bottomBar={NavigationBar(containerColor=MaterialTheme.colorScheme.surface, tonalElevation=6.dp){
+    val primarySections=listOf(Section.CHATS,Section.AI_HUB,Section.MODELS,Section.WORKSPACE)
+    primarySections.forEach{item->
+     val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.WORKSPACE->Icons.Default.FolderOpen;else->Icons.Default.MoreHoriz}
+     NavigationBarItem(selected=section==item,onClick={section=item;moreNavigationExpanded=false},icon={Icon(icon,item.label)},label={Text(item.label,maxLines=1)})
+    }
+    Box{
+     NavigationBarItem(selected=section==Section.TRAINING||section==Section.ONLINE_AI||section==Section.SETTINGS,onClick={moreNavigationExpanded=true},icon={Icon(Icons.Default.MoreHoriz,"More sections")},label={Text("More")})
+     DropdownMenu(expanded=moreNavigationExpanded,onDismissRequest={moreNavigationExpanded=false}){
+      listOf(Section.TRAINING,Section.ONLINE_AI,Section.SETTINGS).forEach{item->
+       val icon=when(item){Section.TRAINING->Icons.Default.Tune;Section.ONLINE_AI->Icons.Default.Cloud;else->Icons.Default.Settings}
+       DropdownMenuItem(text={Text(item.label)},leadingIcon={Icon(icon,null)},onClick={section=item;moreNavigationExpanded=false})
+      }
+     }
+    }
+   }}
   ){padding->Column(Modifier.fillMaxSize().padding(padding)){
    when(section){
     Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,activeModelName,runtimeMessage,loadingModel,sending,voiceListening,
