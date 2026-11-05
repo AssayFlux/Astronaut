@@ -1,9 +1,12 @@
 package org.offlineai.messenger.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,6 +32,7 @@ import org.offlineai.messenger.ai.PromptTurn
 import org.offlineai.messenger.data.*
 import org.offlineai.messenger.features.OfflineDocumentReader
 import org.offlineai.messenger.features.LocalRagIndex
+import org.offlineai.messenger.features.OfflineVoiceController
 import java.io.File
 import java.util.UUID
 
@@ -51,6 +55,8 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
  var activeModelPath by remember{mutableStateOf<String?>(null)}
  var activeModelName by remember{mutableStateOf<String?>(null)}
  var runtimeMessage by remember{mutableStateOf("Import a .litertlm model to start offline AI chat.")}
+ var voiceListening by remember{mutableStateOf(false)}
+ val voiceController=remember(context){OfflineVoiceController(context,onResult={spoken->draft=if(draft.isBlank())spoken else "$draft $spoken"},onError={runtimeMessage=it},onListeningChanged={voiceListening=it})}
  var loadingModel by remember{mutableStateOf(false)}
  var sending by remember{mutableStateOf(false)}
  var showNewProject by remember{mutableStateOf(false)}
@@ -63,10 +69,12 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
  val allMessages by db.chatDao().messages(conversationId?:-1L).collectAsState(initial=emptyList())
  val messages=allMessages.filter{it.conversationId==conversationId}
  DisposableEffect(runtime){onDispose{runtime.close()}}
+ DisposableEffect(voiceController){onDispose{voiceController.close()}}
  LaunchedEffect(conversations,selectedConversation){
   if(selectedConversation!=null && conversations.none{it.id==selectedConversation}) selectedConversation=null
   if(selectedConversation==null && conversations.isEmpty()) selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))
  }
+ val microphonePermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->if(granted)voiceController.startListening()else runtimeMessage="Microphone permission was denied."}
  val attachmentPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
   if(uri!=null){
    runCatching{context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}
@@ -99,7 +107,9 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
    }}}
   ){padding->Column(Modifier.fillMaxSize().padding(padding)){
    when(section){
-    Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,activeModelName,runtimeMessage,loadingModel,sending,
+    Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,activeModelName,runtimeMessage,loadingModel,sending,voiceListening,
+     {if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)voiceController.startListening()else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)},
+     {text->voiceController.speak(text)} ,
      {attachmentPicker.launch(arrayOf("*/*"))},{pendingAttachment=null},{selectedConversation=it},{
       val text=draft.trim();val target=conversationId;val attachment=pendingAttachment
       if((text.isNotEmpty()||attachment!=null)&&target!=null&&!sending){
@@ -158,7 +168,7 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
  }){Text("Create")}},dismissButton={TextButton(onClick={showNewProject=false}){Text("Cancel")}})
 }
 
-@Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,activeModelName:String?,runtimeMessage:String,loading:Boolean,sending:Boolean,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onSend:()->Unit){
+@Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,activeModelName:String?,runtimeMessage:String,loading:Boolean,sending:Boolean,voiceListening:Boolean,onVoice:()->Unit,onSpeak:(String)->Unit,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onSend:()->Unit){
  Column(Modifier.fillMaxSize().padding(horizontal=16.dp)){
   if(conversations.size>1) LazyColumn(Modifier.heightIn(max=100.dp),verticalArrangement=Arrangement.spacedBy(2.dp)){items(conversations){chat->TextButton(onClick={onSelect(chat.id)},modifier=Modifier.fillMaxWidth()){Text((if(chat.id==selectedId)"●  " else "")+chat.title,maxLines=1,overflow=TextOverflow.Ellipsis)}}}
   if(messages.isEmpty()) Column(Modifier.weight(1f).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center){
@@ -172,6 +182,7 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
      Surface(color=if(mine)Color(0xFFDCEBE3)else Color.White,shape=RoundedCornerShape(18.dp),modifier=Modifier.widthIn(max=320.dp)){
       Column(Modifier.padding(14.dp)){
        if(message.body.isNotBlank()) Text(message.body,color=Ink)
+       if(!mine&&message.body.isNotBlank()) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End){IconButton(onClick={onSpeak(message.body)}){Icon(Icons.Default.VolumeUp,"Read response aloud",tint=Green)}}
        if(message.attachmentName!=null){Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.AttachFile,null,tint=Green,modifier=Modifier.size(16.dp));Text(message.attachmentName,color=Green,style=MaterialTheme.typography.labelMedium)}}
        Text(if(mine)"YOU" else "ASTRONAUT",style=MaterialTheme.typography.labelSmall,color=Muted)
       }
@@ -186,6 +197,7 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
   Surface(color=Color.White,shape=RoundedCornerShape(24.dp),shadowElevation=2.dp){
    Row(Modifier.padding(start=6.dp,end=8.dp,top=4.dp,bottom=4.dp),verticalAlignment=Alignment.CenterVertically){
     IconButton(onClick=onAttach){Icon(Icons.Default.AttachFile,"Attach file",tint=Muted)}
+    IconButton(onClick=onVoice,enabled=!sending){Icon(if(voiceListening)Icons.Default.MicOff else Icons.Default.Mic,if(voiceListening)"Listening" else "Speak message",tint=if(voiceListening)Green else Muted)}
     TextField(draft,onDraftChange,Modifier.weight(1f),placeholder={Text("Message privately…")},maxLines=5,enabled=!sending,colors=TextFieldDefaults.colors(focusedContainerColor=Color.Transparent,unfocusedContainerColor=Color.Transparent,focusedIndicatorColor=Color.Transparent,unfocusedIndicatorColor=Color.Transparent))
     IconButton(onClick=onSend,enabled=!sending&&(draft.isNotBlank()||attachmentName!=null)){if(sending)CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)else Icon(Icons.Default.Send,"Send",tint=Green)}
    }
