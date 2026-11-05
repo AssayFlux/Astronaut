@@ -455,11 +455,19 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }
 }
 
-@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,onImport:()->Unit,onDownload:(String,String,String)->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit){
+@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,embeddingReady:Boolean,embeddingStatus:String,onImportEmbeddingModel:()->Unit,onImportEmbeddingVocab:()->Unit,onImport:()->Unit,onDownload:(String,String,String)->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit){
  Column(Modifier.fillMaxSize().padding(16.dp)){
   Text("On-device model library",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
   Text("Import a .litertlm model. Model files stay in app-private storage and are not included in the APK.",color=Muted)
   Spacer(Modifier.height(14.dp));Button(onClick=onImport,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import .litertlm model")}
+  Spacer(Modifier.height(18.dp))
+  Text("Semantic document search",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+  Text("Optional local embedding model. Use a MiniLM-compatible ONNX export with input_ids and attention_mask (int64), plus its matching WordPiece vocab.txt. Files stay on this device.",color=Muted,style=MaterialTheme.typography.bodySmall)
+  OutlinedButton(onClick=onImportEmbeddingModel,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.FileOpen,null);Spacer(Modifier.width(8.dp));Text("Import embedding model (.onnx)")}
+  OutlinedButton(onClick=onImportEmbeddingVocab,modifier=Modifier.fillMaxWidth(),enabled=!downloading){Icon(Icons.Default.Description,null);Spacer(Modifier.width(8.dp));Text("Import matching vocab.txt")}
+  Text(if(embeddingReady)"SEMANTIC RETRIEVAL CONFIGURED" else "BM25 fallback active",color=if(embeddingReady)Green else Muted,style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+  Text(embeddingStatus,color=Muted,style=MaterialTheme.typography.bodySmall)
+
   var downloadUrl by remember{mutableStateOf("")}
   var downloadSha by remember{mutableStateOf("")}
   var downloadName by remember{mutableStateOf("model.litertlm")}
