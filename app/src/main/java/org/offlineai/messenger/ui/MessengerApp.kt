@@ -306,15 +306,22 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.WORKSPACE->Icons.Default.FolderOpen;else->Icons.Default.MoreHoriz}
      NavigationBarItem(selected=section==item,onClick={section=item;moreNavigationExpanded=false},icon={Icon(icon,item.label)},label={Text(item.label,maxLines=1)})
     }
-    Box{
-     NavigationBarItem(selected=section==Section.TRAINING||section==Section.ONLINE_AI||section==Section.SETTINGS,onClick={moreNavigationExpanded=true},icon={Icon(Icons.Default.MoreHoriz,"More sections")},label={Text("More")})
-     DropdownMenu(expanded=moreNavigationExpanded,onDismissRequest={moreNavigationExpanded=false}){
-      listOf(Section.TRAINING,Section.ONLINE_AI,Section.SETTINGS).forEach{item->
-       val icon=when(item){Section.TRAINING->Icons.Default.Tune;Section.ONLINE_AI->Icons.Default.Cloud;else->Icons.Default.Settings}
-       DropdownMenuItem(text={Text(item.label)},leadingIcon={Icon(icon,null)},onClick={section=item;moreNavigationExpanded=false})
+    NavigationBarItem(
+     selected=section==Section.TRAINING||section==Section.ONLINE_AI||section==Section.SETTINGS,
+     onClick={moreNavigationExpanded=true},
+     icon={
+      Box{
+       Icon(Icons.Default.MoreHoriz,"More sections")
+       DropdownMenu(expanded=moreNavigationExpanded,onDismissRequest={moreNavigationExpanded=false}){
+        listOf(Section.TRAINING,Section.ONLINE_AI,Section.SETTINGS).forEach{item->
+         val icon=when(item){Section.TRAINING->Icons.Default.Tune;Section.ONLINE_AI->Icons.Default.Cloud;else->Icons.Default.Settings}
+         DropdownMenuItem(text={Text(item.label)},leadingIcon={Icon(icon,null)},onClick={section=item;moreNavigationExpanded=false})
+        }
+       }
       }
-     }
-    }
+     },
+     label={Text("More")}
+    )
    }}
   ){padding->Column(Modifier.fillMaxSize().padding(padding)){
    when(section){
