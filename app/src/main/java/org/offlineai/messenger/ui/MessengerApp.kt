@@ -244,18 +244,22 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
            val documents=db.chatDao().attachmentMessages(target).asReversed()
            val embeddingModel=embeddingModelPath?.let(::File)
            val embeddingVocab=embeddingVocabPath?.let(::File)
-           val excerpts=if(embeddingModel?.isFile==true&&embeddingVocab?.isFile==true){
-            withContext(Dispatchers.IO){
-             val embedder=OnnxWordPieceEmbedder(embeddingModel,embeddingVocab,embeddingModel.name+":"+embeddingModel.length()+":"+embeddingVocab.name+":"+embeddingVocab.length())
-             try{
-              val rag=PersistentHybridRag(db.knowledgeDao(),embedder,target.toString())
-              documents.forEach{document->
-               document.attachmentText?.takeIf{it.isNotBlank()}?.let{rag.indexDocument((document.attachmentName?: "attachment")+"#"+document.id,it)}
-              }
-              rag.contextFor(question,limit=4)
-             }finally{embedder.close()}
-            }
-           }else{
+           val semanticExcerpts=if(embeddingModel?.isFile==true&&embeddingVocab?.isFile==true){
+            try{
+             withContext(Dispatchers.IO){
+              val embedder=OnnxWordPieceEmbedder(embeddingModel,embeddingVocab,embeddingModel.name+":"+embeddingModel.length()+":"+embeddingVocab.name+":"+embeddingVocab.length())
+              try{
+               val rag=PersistentHybridRag(db.knowledgeDao(),embedder,target.toString())
+               documents.forEach{document->
+                document.attachmentText?.takeIf{it.isNotBlank()}?.let{rag.indexDocument((document.attachmentName?: "attachment")+"#"+document.id,it)}
+               }
+               rag.contextFor(question,limit=4)
+              }finally{embedder.close()}
+             }
+            }catch(error:kotlinx.coroutines.CancellationException){throw error}
+            catch(error:Exception){embeddingStatus="Semantic model unavailable; using BM25 fallback: "+(error.message?:error.javaClass.simpleName);""}
+           }else ""
+           val excerpts=if(semanticExcerpts.isNotBlank())semanticExcerpts else{
             val index=LocalRagIndex()
             documents.forEach{document->document.attachmentText?.takeIf{it.isNotBlank()}?.let{index.add(document.attachmentName?: "attachment",it)}}
             index.contextFor(question,limit=4)
