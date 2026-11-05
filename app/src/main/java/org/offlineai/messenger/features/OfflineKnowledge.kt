@@ -135,16 +135,40 @@ class LocalRagIndex(private val maxChunkChars: Int = 900, private val overlap: I
         }
     }
 
+    /**
+     * Offline BM25 lexical retrieval. This is stronger than raw term-frequency ranking,
+     * but deliberately does not claim semantic/embedding search.
+     */
     @Synchronized fun search(query: String, limit: Int = 5): List<RetrievedChunk> {
         require(limit in 1..100) { "Retrieval limit must be between 1 and 100." }
         val terms = tokenize(query).toSet()
-        if (terms.isEmpty()) return emptyList()
-        return chunks.map { chunk ->
-            val words = tokenize(chunk.text)
+        if (terms.isEmpty() || chunks.isEmpty()) return emptyList()
+
+        val tokenized = chunks.map { tokenize(it.text) }
+        val averageLength = tokenized.sumOf { it.size }.toDouble() / tokenized.size.coerceAtLeast(1)
+        val documentFrequency = terms.associateWith { term ->
+            tokenized.count { words -> term in words }
+        }
+        val k1 = 1.2
+        val b = 0.75
+
+        return chunks.mapIndexed { index, chunk ->
+            val words = tokenized[index]
             val counts = words.groupingBy { it }.eachCount()
-            val score = terms.sumOf { term -> (counts[term] ?: 0).toDouble() / (1.0 + words.size / 100.0) }
+            val lengthNorm = if (averageLength > 0.0) words.size / averageLength else 0.0
+            val score = terms.sumOf { term ->
+                val frequency = counts[term] ?: 0
+                if (frequency == 0) 0.0 else {
+                    val df = documentFrequency[term] ?: 0
+                    val inverseDocumentFrequency = kotlin.math.ln(
+                        1.0 + (chunks.size - df + 0.5) / (df + 0.5)
+                    )
+                    inverseDocumentFrequency * (frequency * (k1 + 1.0)) /
+                        (frequency + k1 * (1.0 - b + b * lengthNorm))
+                }
+            }
             RetrievedChunk(chunk, score)
-        }.filter { it.score > 0 }.sortedByDescending { it.score }.take(limit)
+        }.filter { it.score > 0.0 }.sortedByDescending { it.score }.take(limit)
     }
 
     @Synchronized fun contextFor(query: String, limit: Int = 5): String {
