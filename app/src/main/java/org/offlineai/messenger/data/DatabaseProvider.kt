@@ -1,15 +1,20 @@
 package org.offlineai.messenger.data
 
+import android.content.ContentValues
 import android.content.Context
+import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase as FrameworkSQLiteDatabase
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 /**
- * Explicit migrations preserve conversations, model records and workspace projects.
- * Schema history: v1 had conversations/messages; v2 added model/workspace tables and
- * the message conversation index; v3 added local_models.modelPath; v4 added attachmentText;
- * v5 links conversations to workspace projects.
+ * Explicit schema migrations preserve all local records. The first encrypted open also
+ * copies the legacy plaintext DB into a temporary SQLCipher DB and verifies row counts
+ * before atomically promoting it. The plaintext file is deleted only after the encrypted
+ * database has successfully opened and the migration marker has been committed.
  */
 private val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -49,15 +54,142 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
 }
 
 object DatabaseProvider {
+    private const val LEGACY_NAME = "astronaut-local.db"
+    private const val ENCRYPTED_NAME = "astronaut-secure.db"
+    private const val TEMP_NAME = "astronaut-secure-migrating.db"
+    private const val STATE_PREFS = "astronaut_secure_database"
+    private const val MIGRATION_COMPLETE = "encrypted_migration_complete"
+
     @Volatile private var instance: AppDatabase? = null
 
     fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
-        instance ?: Room.databaseBuilder(
-            context.applicationContext,
-            AppDatabase::class.java,
-            "astronaut-local.db"
-        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
-            .build()
-            .also { instance = it }
+        instance ?: openEncrypted(context.applicationContext).also { instance = it }
     }
+
+    private fun openEncrypted(context: Context): AppDatabase {
+        // SQLCipher's native core must be loaded before constructing its Room factory.
+        System.loadLibrary("sqlcipher")
+
+        val legacyFile = context.getDatabasePath(LEGACY_NAME)
+        val encryptedFile = context.getDatabasePath(ENCRYPTED_NAME)
+        val prefs = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        val migrationDone = prefs.getBoolean(MIGRATION_COMPLETE, false)
+
+        // If the process died before committing the marker, the old DB is still canonical.
+        // Discard only the incomplete encrypted copy and repeat the verified copy.
+        if (encryptedFile.exists() && legacyFile.exists() && !migrationDone) {
+            check(context.deleteDatabase(ENCRYPTED_NAME)) {
+                "Could not remove an incomplete encrypted database copy."
+            }
+        }
+
+        val canCreateKey = !encryptedFile.exists() || (legacyFile.exists() && !migrationDone)
+        val passphrase = DatabaseKeyManager.getPassphrase(context, canCreateKey)
+
+        if (!encryptedFile.exists() && legacyFile.exists()) {
+            migrateLegacyDatabase(context, passphrase)
+        }
+
+        val database = Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            ENCRYPTED_NAME
+        )
+            .openHelperFactory(SupportOpenHelperFactory(passphrase.copyOf()))
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+            .build()
+
+        // Force key validation now, before discarding the recoverable plaintext source.
+        database.openHelper.writableDatabase
+        check(prefs.edit().putBoolean(MIGRATION_COMPLETE, true).commit()) {
+            "Could not commit encrypted database migration state."
+        }
+        if (legacyFile.exists()) {
+            check(context.deleteDatabase(LEGACY_NAME)) {
+                "Encrypted database opened, but the old plaintext database could not be deleted."
+            }
+        }
+        return database
+    }
+
+    private fun migrateLegacyDatabase(context: Context, passphrase: ByteArray) {
+        context.deleteDatabase(TEMP_NAME)
+        val legacy = Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            LEGACY_NAME
+        )
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+            .build()
+
+        val encryptedTemp = Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            TEMP_NAME
+        )
+            .openHelperFactory(SupportOpenHelperFactory(passphrase.copyOf()))
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+            .build()
+
+        try {
+            val source = legacy.openHelper.writableDatabase
+            val target = encryptedTemp.openHelper.writableDatabase
+            val tables = listOf("conversations", "messages", "local_models", "workspace_projects")
+            target.beginTransaction()
+            try {
+                tables.forEach { table -> copyTable(source, target, table) }
+                target.setTransactionSuccessful()
+            } finally {
+                target.endTransaction()
+            }
+            tables.forEach { table ->
+                val sourceCount = countRows(source, table)
+                val targetCount = countRows(target, table)
+                check(sourceCount == targetCount) {
+                    "Encrypted migration verification failed for $table ($sourceCount != $targetCount)."
+                }
+            }
+        } catch (error: Throwable) {
+            encryptedTemp.close()
+            legacy.close()
+            context.deleteDatabase(TEMP_NAME)
+            throw error
+        }
+
+        encryptedTemp.close()
+        legacy.close()
+        val tempFile = context.getDatabasePath(TEMP_NAME)
+        val encryptedFile = context.getDatabasePath(ENCRYPTED_NAME)
+        check(tempFile.isFile && tempFile.renameTo(encryptedFile)) {
+            context.deleteDatabase(TEMP_NAME)
+            "Could not promote the verified encrypted database file."
+        }
+    }
+
+    private fun copyTable(source: SupportSQLiteDatabase, target: SupportSQLiteDatabase, table: String) {
+        source.query("SELECT * FROM $table").use { cursor ->
+            while (cursor.moveToNext()) {
+                val values = ContentValues(cursor.columnCount)
+                for (index in 0 until cursor.columnCount) {
+                    val column = cursor.getColumnName(index)
+                    when (cursor.getType(index)) {
+                        Cursor.FIELD_TYPE_NULL -> values.putNull(column)
+                        Cursor.FIELD_TYPE_INTEGER -> values.put(column, cursor.getLong(index))
+                        Cursor.FIELD_TYPE_FLOAT -> values.put(column, cursor.getDouble(index))
+                        Cursor.FIELD_TYPE_STRING -> values.put(column, cursor.getString(index))
+                        Cursor.FIELD_TYPE_BLOB -> values.put(column, cursor.getBlob(index))
+                    }
+                }
+                target.insert(table, FrameworkSQLiteDatabase.CONFLICT_REPLACE, values)
+            }
+        }
+    }
+
+    private fun countRows(database: SupportSQLiteDatabase, table: String): Long =
+        database.query("SELECT COUNT(*) FROM $table").use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0) else 0L
+        }
 }
