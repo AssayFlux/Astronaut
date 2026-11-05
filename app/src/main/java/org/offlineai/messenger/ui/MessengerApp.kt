@@ -422,7 +422,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
 
      if(model.modelPath!=null){loadingModel=true;scope.launch{
       try{val visionEnabled=model.modelPath==visionModelPath;runtime.load(model.modelPath,enableVision=visionEnabled);activeModelPath=model.modelPath;activeModelPrefs.edit().putString("path",model.modelPath).apply();activeModelName=model.displayName;activeModelVision=visionEnabled;runtimeMessage=if(visionEnabled)"Loaded "+model.displayName+" with local image input enabled." else "Loaded "+model.displayName+". Text chat is ready offline."}
-      catch(error:Throwable){activeModelPath=null;activeModelName=null;activeModelVision=false;runtimeMessage="Could not load model: "+(error.message?:error.javaClass.simpleName)}
+      catch(error:Throwable){activeModelPath=null;activeModelPrefs.edit().remove("path").apply();activeModelName=null;activeModelVision=false;runtimeMessage="Could not load model: "+(error.message?:error.javaClass.simpleName)}
       finally{loadingModel=false}
      }}
     },{model->scope.launch{if(activeModelPath==model.modelPath){runtime.unload();activeModelPath=null;activeModelPrefs.edit().remove("path").apply();activeModelName=null;activeModelVision=false};if(visionModelPath==model.modelPath){visionPrefs.edit().remove("vision_model_path").apply();visionModelPath=null};model.modelPath?.let{File(it).delete()};db.modelDao().remove(model.uri)}},visionModelPath,{path->
