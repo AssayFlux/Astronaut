@@ -39,7 +39,7 @@ This file distinguishes implemented code from behavior that still requires hardw
 - [x] Appearance preferences include light/dark mode and five accent colours
 - [x] Speech language choices and local voice names use readable labels
 
-- [x] Android JVM unit-test GitHub Actions workflow
+- [x] Android JVM unit-test and Android lint GitHub Actions workflow
 - [x] Android emulator instrumentation smoke tests in CI
 - [x] Debug APK assembly and artifact upload in CI
 - [x] Backend pytest CI workflow
