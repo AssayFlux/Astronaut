@@ -31,7 +31,7 @@ A task is available only when an installed adapter explicitly declares support f
 | Whisper model / Sherpa-ONNX | Whisper.cpp or Sherpa-ONNX adapter | Speech recognition |
 | OpenAI-compatible endpoint | Remote HTTP adapter | Optional online inference |
 
-These are adapter targets, not a claim that every runtime is already bundled. The existing LiteRT-LM and ONNX features remain the working baseline. Each additional runtime must be integrated and tested separately.
+Implemented adapters in this branch: LiteRT-LM chat/vision wraps the existing LiteRT-LM runtime; ONNX embeddings wrap the existing MiniLM-compatible ONNX embedder and return a typed vector. The generic registry can discover these adapters. GGUF, diffusion, Whisper and Sherpa are recognized catalog formats but their execution engines are not yet bundled.
 
 ## Adapter implementation checklist
 
@@ -49,8 +49,15 @@ These are adapter targets, not a claim that every runtime is already bundled. Th
 
 A model file is data, never executable plugin code. Runtime adapters must be compiled into the signed app or delivered through a separately trusted, signed Android feature-module mechanism. Do not download and execute arbitrary JAR, DEX, native libraries or scripts from model URLs.
 
-Remote adapters must be visibly marked Online, require explicit opt-in, use HTTPS, protect credentials with Android Keystore-backed storage, and disclose what prompt/history/files leave the device. No automatic online fallback is allowed.
+The OpenAI-compatible remote chat adapter and Online AI screen are implemented in this branch. It requires explicit opt-in, HTTPS, stores the API key as AES-GCM ciphertext with a non-exportable Android Keystore key, bounds response size, disables redirects, and never falls back automatically. The current chat integration sends only the current text prompt (plus the response-style system instruction); it does not send chat history, project notes, documents or attachments. Provider terms, free quotas and retention remain provider-controlled.
 
 ## Current implementation status
 
-The generic task/format/manifest/runtime contract and compatibility/SHA-256 checks have been added. This is the extension point for future engines; it does not itself bundle llama.cpp, a diffusion engine, Whisper or an online provider. Those require their own runtime dependencies, native ABI packaging, provider implementations, UI registration and device validation.
+Implemented in this branch:
+- Generic task, artifact, manifest and runtime adapter contracts plus a trusted in-app registry.
+- LiteRT-LM adapter and ONNX embedding adapter for existing app engines.
+- Android API/available-memory preflight helper, SHA-256 verification contract and 15 GB artifact cap.
+- Signed catalog parsing and verified downloads for LiteRT-LM, GGUF, ONNX, TFLite, diffusion bundles and Whisper/Sherpa artifacts. Unsupported runtimes are visibly blocked from the current LiteRT-LM Load action.
+- OpenAI-compatible online chat configuration, explicit online toggle, encrypted API key storage and no-history/no-attachment remote request policy.
+
+Not yet implemented as executable on-device engines: llama.cpp/GGUF, MNN/NCNN diffusion image generation, Whisper.cpp and Sherpa-ONNX. Their artifact types can be represented/downloaded, but the app must not claim those files can run until native libraries/adapters, ABI packaging, model-specific metadata and real-device tests are completed. The compatibility checks are preflight gates, not guarantees that a model below 15 GB fits a 12 GB phone.
