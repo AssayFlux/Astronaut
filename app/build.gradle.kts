@@ -43,6 +43,7 @@ dependencies {
  implementation("androidx.media3:media3-exoplayer:1.5.1")
  implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.1")
  implementation("com.google.mlkit:text-recognition:16.0.1")
+ implementation("com.google.mlkit:image-labeling:17.0.9")
  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
  testImplementation("junit:junit:4.13.2")
  testImplementation("org.json:json:20250517")
