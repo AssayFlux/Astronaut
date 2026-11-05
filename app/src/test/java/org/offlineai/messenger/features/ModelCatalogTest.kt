@@ -108,7 +108,7 @@ class ModelCatalogTest {
 
     @Test fun rejectsUnknownCapabilitiesAndInvalidDeviceRequirements() {
         val invalidCapability = modelJson().replace(""""chat","code"""", """"telepathy"""")
-        val invalidRam = modelJson().replace(""""min_ram_mb":2048"""", """"min_ram_mb":128"""")
+        val invalidRam = modelJson().replace("2048", "128")
         assertTrue(runCatching { ModelCatalogParser.parseVerifiedPayload(payload(invalidCapability)) }.isFailure)
         assertTrue(runCatching { ModelCatalogParser.parseVerifiedPayload(payload(invalidRam)) }.exceptionOrNull() is IllegalArgumentException)
     }
