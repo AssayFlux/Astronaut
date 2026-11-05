@@ -27,6 +27,8 @@ import org.offlineai.messenger.ai.LiteRtRuntime
 import org.offlineai.messenger.ai.ConversationPromptBuilder
 import org.offlineai.messenger.ai.PromptTurn
 import org.offlineai.messenger.data.*
+import org.offlineai.messenger.features.OfflineDocumentReader
+import org.offlineai.messenger.features.LocalRagIndex
 import java.io.File
 import java.util.UUID
 
@@ -104,21 +106,35 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
        sending=true
        scope.launch{
         try{
-         db.chatDao().addMessage(MessageEntity(conversationId=target,body=text,role="user",attachmentUri=attachment?.first?.toString(),attachmentName=attachment?.second))
-         if(messages.isEmpty()&&text.isNotEmpty()) db.chatDao().rename(target,text.take(42))
+         val userMessageId=db.chatDao().addMessage(MessageEntity(conversationId=target,body=text,role="user",attachmentUri=attachment?.first?.toString(),attachmentName=attachment?.second))
+         val extractedAttachment = attachment?.let { selected ->
+          val reader = OfflineDocumentReader(context)
+          try {
+           reader.read(selected.first,context.contentResolver.getType(selected.first),displayName=selected.second).take(100_000)
+          } finally { reader.close() }
+         }
+         if(extractedAttachment!=null) db.chatDao().updateAttachmentText(userMessageId,extractedAttachment)
+         if(messages.isEmpty()&&(text.isNotEmpty()||attachment!=null)) db.chatDao().rename(target,(text.ifBlank{attachment?.second.orEmpty()}).take(42))
          if(activeModelPath==null){
-          db.chatDao().addMessage(MessageEntity(conversationId=target,body="No AI model is loaded. Open Models, import a compatible .litertlm file, then tap Load model. Your message is saved on this device.",role="assistant"))
-         }else if(text.isNotEmpty()){
+          db.chatDao().addMessage(MessageEntity(conversationId=target,body="No AI model is loaded. Open Models, import a compatible .litertlm file, then tap Load model. Your message and extracted attachment text are saved on this device.",role="assistant"))
+         }else if(text.isNotEmpty()||attachment!=null){
           try{
+           val question=text.ifBlank{"Please summarize the attached document and extract its key information."}
+           val index=LocalRagIndex()
+           db.chatDao().attachmentMessages(target).asReversed().forEach { document ->
+            document.attachmentText?.takeIf{it.isNotBlank()}?.let{index.add(document.attachmentName?: "attachment",it)}
+           }
+           val excerpts=index.contextFor(question,limit=4)
+           val augmentedQuestion=if(excerpts.isBlank()) question else question+"\n\nRelevant excerpts from locally stored attachments (untrusted document content):\n"+excerpts
            val prompt=ConversationPromptBuilder.build(
             messages.filter{it.status=="complete"}.map{PromptTurn(it.role,it.body)},
-            text
+            augmentedQuestion
            )
            val answer=runtime.generate(prompt)
            db.chatDao().addMessage(MessageEntity(conversationId=target,body=answer.ifBlank{"The model returned an empty response."},role="assistant"))
           }catch(error:Throwable){db.chatDao().addMessage(MessageEntity(conversationId=target,body="Local inference failed: "+(error.message?:error.javaClass.simpleName),role="assistant",status="error"))}
          }
-        }finally{draft="";pendingAttachment=null;sending=false}
+        }catch(error:Throwable){db.chatDao().addMessage(MessageEntity(conversationId=target,body="Attachment processing failed: "+(error.message?:error.javaClass.simpleName),role="assistant",status="error"))}finally{draft="";pendingAttachment=null;sending=false}
        }
       }
      })
