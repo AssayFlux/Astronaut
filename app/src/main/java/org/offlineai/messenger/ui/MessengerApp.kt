@@ -107,7 +107,11 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
           db.chatDao().addMessage(MessageEntity(conversationId=target,body="No AI model is loaded. Open Models, import a compatible .litertlm file, then tap Load model. Your message is saved on this device.",role="assistant"))
          }else if(text.isNotEmpty()){
           try{
-           val answer=runtime.generate(text)
+           val prompt=ConversationPromptBuilder.build(
+            messages.filter{it.status=="complete"}.map{PromptTurn(it.role,it.body)},
+            text
+           )
+           val answer=runtime.generate(prompt)
            db.chatDao().addMessage(MessageEntity(conversationId=target,body=answer.ifBlank{"The model returned an empty response."},role="assistant"))
           }catch(error:Throwable){db.chatDao().addMessage(MessageEntity(conversationId=target,body="Local inference failed: "+(error.message?:error.javaClass.simpleName),role="assistant",status="error"))}
          }
