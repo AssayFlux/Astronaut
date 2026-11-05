@@ -85,7 +85,7 @@ class ModelInstallStore(context: Context) {
                 "This model version already exists but is incomplete; remove the damaged version before reinstalling."
             }
             val record = JSONObject(existingMetadata.readText())
-            require(record.optString("sha256").equals(entry.sha256, true) && sha256(target).equals(entry.sha256, true)) {
+            require(record.optString("sha256").equals(entry.sha256, true) && sha256(target, ensureActive).equals(entry.sha256, true)) {
                 "Model version ${entry.version} is immutable and already contains different bytes."
             }
             activate(entry, target, modelRoot)
@@ -108,7 +108,7 @@ class ModelInstallStore(context: Context) {
                 }
             }
             ensureActive()
-            val actual = sha256(stagedFile)
+            val actual = sha256(stagedFile, ensureActive)
             ensureActive()
             require(actual.equals(entry.sha256, true)) { "Model checksum mismatch during installation." }
             require(stagedFile.length() == entry.sizeBytes) { "Model size changed during installation." }
@@ -198,11 +198,12 @@ class ModelInstallStore(context: Context) {
         return File(root, modelId)
     }
 
-    private fun sha256(file: File): String {
+    private fun sha256(file: File, ensureActive: () -> Unit = {}): String {
         val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().buffered().use { input ->
             val buffer = ByteArray(64 * 1024)
             while (true) {
+                ensureActive()
                 val count = input.read(buffer)
                 if (count < 0) break
                 digest.update(buffer, 0, count)
