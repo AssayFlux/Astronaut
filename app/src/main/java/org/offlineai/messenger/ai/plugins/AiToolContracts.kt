@@ -103,7 +103,8 @@ data class AiInferenceRequest(
 data class AiInferenceResult(
     val text: String? = null,
     val outputFiles: List<File> = emptyList(),
-    val metadata: Map<String, String> = emptyMap()
+    val metadata: Map<String, String> = emptyMap(),
+    val embedding: FloatArray? = null
 )
 
 /** Implement this interface for each concrete engine (LiteRT-LM, llama.cpp, ONNX, diffusion, etc.). */
