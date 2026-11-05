@@ -39,4 +39,4 @@ The ordinary Android CI continues to build and upload a debug APK. A green debug
 
 ## Remaining release checks
 
-Before publishing, test installation/upgrade on physical devices, verify the signing certificate and application ID, review permissions and data handling, and complete database-at-rest encryption/migration work. The current local Room database is not SQLCipher-encrypted.
+Before publishing, test installation/upgrade on physical devices, verify the signing certificate and application ID, review permissions and data handling, and complete the final production security review. The Room database uses SQLCipher with a Keystore-managed key and explicit legacy migrations; verify migration, recovery and backup behavior on supported Android versions before release.
