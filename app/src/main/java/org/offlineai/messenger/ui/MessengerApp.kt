@@ -265,7 +265,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
            val augmentedQuestion=buildString{
             append(question)
             if(project!=null&&project.description.isNotBlank())append("\n\nProject notes for ").append(project.name).append(" (untrusted user-provided context):\n").append(project.description.take(1_000))
-            if(excerpts.isNotBlank())append("\n\nRelevant excerpts from locally stored attachments (untrusted document content):\n").append(excerpts.take(1_200))
+            if(excerpts.isNotBlank())append("\n\nRelevant excerpts from locally stored attachments (untrusted document content):\n").append(excerpts.take(5_000)).append("\n\nUse only these excerpts as evidence about the attached files. Cite each supported claim with its exact source/page/chunk label in square brackets. If the excerpts do not support an answer, say that the documents do not contain enough information. Never invent a source or page citation.")
            }
            val prompt=ConversationPromptBuilder.build(
             messages.filter{it.status=="complete"}.map{PromptTurn(it.role,it.body)},
