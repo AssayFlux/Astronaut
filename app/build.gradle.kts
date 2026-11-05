@@ -60,6 +60,8 @@ dependencies {
  implementation("androidx.documentfile:documentfile:1.0.1")
  implementation("androidx.room:room-runtime:$roomVersion")
  implementation("androidx.room:room-ktx:$roomVersion")
+ implementation("net.zetetic:sqlcipher-android:4.20.0")
+ implementation("androidx.sqlite:sqlite:2.7.0")
  ksp("androidx.room:room-compiler:$roomVersion")
  implementation("androidx.datastore:datastore-preferences:1.1.1")
  implementation("androidx.work:work-runtime-ktx:2.10.0")
