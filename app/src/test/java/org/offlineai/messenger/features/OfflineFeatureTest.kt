@@ -27,6 +27,14 @@ not-json"""
         assertEquals(1, report.trainRecords)
     }
 
+    @Test fun ragContextFallsBackToLeadingChunksForBroadSummary() {
+        val index = LocalRagIndex(maxChunkChars = 40, overlap = 5)
+        index.add("report.pdf", "First section contains the executive overview. Second section contains financial detail.")
+        val context = index.contextFor("summarize", limit = 1)
+        assertTrue(context.contains("report.pdf"))
+        assertTrue(context.contains("First section"))
+    }
+
     @Test fun ragEmptyQueryReturnsNoResults() {
         val index = LocalRagIndex()
         index.add("doc", "A useful local document.")
