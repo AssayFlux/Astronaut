@@ -24,9 +24,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.offlineai.messenger.ai.LiteRtRuntime
@@ -47,6 +49,8 @@ import org.offlineai.messenger.features.OfflineVoiceController
 import org.offlineai.messenger.features.VerifiedModelDownloader
 import org.offlineai.messenger.features.OfflineDatasetInspector
 import org.offlineai.messenger.features.DatasetReport
+import org.offlineai.messenger.features.TrainingApiClient
+import org.offlineai.messenger.features.TrainingJobStatus
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
@@ -88,6 +92,9 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var datasetReport by remember{mutableStateOf<DatasetReport?>(null)}
  var datasetStatus by remember{mutableStateOf("")}
  var datasetBusy by remember{mutableStateOf(false)}
+ var trainingJob by remember{mutableStateOf<TrainingJobStatus?>(null)}
+ var trainingStatus by remember{mutableStateOf("")}
+ var trainingBusy by remember{mutableStateOf(false)}
  val conversations by db.chatDao().conversations().collectAsState(initial=emptyList())
  val models by db.modelDao().models().collectAsState(initial=emptyList())
  val projects by db.workspaceDao().projects().collectAsState(initial=emptyList())
@@ -291,7 +298,44 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       finally{loadingModel=false}
      }}
     },{model->scope.launch{if(activeModelPath==model.modelPath){runtime.unload();activeModelPath=null;activeModelName=null};model.modelPath?.let{File(it).delete()};db.modelDao().remove(model.uri)}})
-    Section.TRAINING->TrainingLabScreen(datasetName,datasetReport,datasetStatus,datasetBusy,{datasetPicker.launch(arrayOf("*/*"))},{datasetExport.launch("astronaut-cleaned-dataset.jsonl")})
+    Section.TRAINING->TrainingLabScreen(
+     datasetName,datasetReport,datasetStatus,datasetBusy,trainingJob,trainingStatus,trainingBusy,
+     {datasetPicker.launch(arrayOf("*/*"))},
+     {datasetExport.launch("astronaut-cleaned-dataset.jsonl")},
+     {serverUrl,apiKey,baseModel,method,epochs->
+      if(!trainingBusy){
+       trainingBusy=true;trainingStatus="Preparing secure upload…";trainingJob=null
+       scope.launch{
+        try{
+         val report=datasetReport?:error("Import a valid JSONL dataset first.")
+         val invalid=report.invalidLines.toSet()
+         val clean=datasetContent.lineSequence().mapIndexedNotNull{index,line->if(line.isNotBlank()&&index+1 !in invalid)line else null}.joinToString("\n")
+         val client=TrainingApiClient(serverUrl,apiKey)
+         val datasetId=client.uploadDataset(datasetName.ifBlank{"astronaut-dataset.jsonl"},clean)
+         trainingStatus="Dataset uploaded to your configured workstation. Creating job…"
+         var job=client.startJob(datasetId,baseModel,method,epochs)
+         trainingJob=job;trainingStatus=job.message
+         while(job.state=="queued"||job.state=="running"){
+          delay(3_000)
+          job=client.getJob(job.id)
+          trainingJob=job
+          trainingStatus=job.message
+         }
+         trainingStatus=job.message
+        }catch(error:Throwable){trainingStatus="Training request failed: "+(error.message?:error.javaClass.simpleName)}
+        finally{trainingBusy=false}
+       }
+      }
+     },
+     {serverUrl,apiKey,jobId->
+      scope.launch{
+       try{
+        val job=TrainingApiClient(serverUrl,apiKey).cancelJob(jobId)
+        trainingJob=job;trainingStatus=job.message
+       }catch(error:Throwable){trainingStatus="Cancellation failed: "+(error.message?:error.javaClass.simpleName)}
+      }
+     }
+    )
     Section.WORKSPACE->WorkspaceScreen(projects,{showNewProject=true},{project->
      scope.launch{
       val existing=db.chatDao().latestProjectConversation(project.id)
@@ -423,8 +467,13 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  report:DatasetReport?,
  status:String,
  busy:Boolean,
+ job:TrainingJobStatus?,
+ jobStatus:String,
+ trainingBusy:Boolean,
  onImport:()->Unit,
- onExport:()->Unit
+ onExport:()->Unit,
+ onStartTraining:(String,String,String,String,Int)->Unit,
+ onCancelTraining:(String,String,String)->Unit
 ){
  Column(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
   Text("Training data lab",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
@@ -446,7 +495,36 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   }else EmptyState("No dataset loaded","Choose a JSONL file containing text, prompt, or messages fields.")
   if(status.isNotBlank())Text(status,color=Green,style=MaterialTheme.typography.bodySmall)
   Divider()
-  Text("Training execution is not running on this phone yet. This screen validates and prepares datasets only; it does not simulate a training job or change model weights. The workstation training backend and model export pipeline are the next stage.",color=Muted,style=MaterialTheme.typography.bodySmall)
+  Divider()
+  Text("Optional workstation training",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+  Text("Training uploads the cleaned dataset to the HTTPS server you configure below. The API key is held only in this screen's memory and is not saved.",color=Muted,style=MaterialTheme.typography.bodySmall)
+  var serverUrl by remember{mutableStateOf("")}
+  var apiKey by remember{mutableStateOf("")}
+  var baseModelPath by remember{mutableStateOf("")}
+  var method by remember{mutableStateOf("lora")}
+  var epochs by remember{mutableStateOf("1")}
+  OutlinedTextField(serverUrl,{serverUrl=it},modifier=Modifier.fillMaxWidth(),label={Text("Training server HTTPS URL")},singleLine=true,enabled=!trainingBusy)
+  OutlinedTextField(apiKey,{apiKey=it},modifier=Modifier.fillMaxWidth(),label={Text("Training API key")},singleLine=true,visualTransformation=PasswordVisualTransformation(),enabled=!trainingBusy)
+  OutlinedTextField(baseModelPath,{baseModelPath=it},modifier=Modifier.fillMaxWidth(),label={Text("Server-local base model directory")},singleLine=true,enabled=!trainingBusy)
+  Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically){
+   FilterChip(selected=method=="lora",onClick={method="lora"},label={Text("LoRA")},enabled=!trainingBusy)
+   FilterChip(selected=method=="qlora",onClick={method="qlora"},label={Text("QLoRA")},enabled=!trainingBusy)
+   OutlinedTextField(epochs,{epochs=it.filter(Char::isDigit)},modifier=Modifier.width(90.dp),label={Text("Epochs")},singleLine=true,enabled=!trainingBusy)
+  }
+  Button(onClick={onStartTraining(serverUrl.trim(),apiKey,baseModelPath.trim(),method,epochs.toIntOrNull()?:1)},modifier=Modifier.fillMaxWidth(),enabled=!trainingBusy&&report?.validRecords?.let{it>0}==true&&serverUrl.startsWith("https://")&&apiKey.length>=16&&baseModelPath.isNotBlank()&&(epochs.toIntOrNull()?:0) in 1..10){
+   if(trainingBusy)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)else Icon(Icons.Default.PlayArrow,null)
+   Spacer(Modifier.width(8.dp));Text(if(trainingBusy)"Training job running…" else "Upload dataset and start training")
+  }
+  if(trainingBusy)LinearProgressIndicator(Modifier.fillMaxWidth())
+  if(job!=null){
+   Text("Job "+job.id+" · "+job.state.uppercase(),fontWeight=FontWeight.SemiBold)
+   LinearProgressIndicator(progress=job.progress/100f,modifier=Modifier.fillMaxWidth())
+   Text(job.message+" ("+job.progress.toInt()+"%)",color=Muted,style=MaterialTheme.typography.bodySmall)
+   if(job.state=="queued"||job.state=="running")TextButton(onClick={onCancelTraining(serverUrl.trim(),apiKey,job.id)}){Text("Cancel training")}
+   if(job.artifactUrl!=null)Text("Adapter artifact endpoint: "+serverUrl.trimEnd('/')+job.artifactUrl,color=Green,style=MaterialTheme.typography.bodySmall)
+  }
+  if(jobStatus.isNotBlank())Text(jobStatus,color=Green,style=MaterialTheme.typography.bodySmall)
+  Text("The GPU worker runs on your workstation, not on Android. It returns a PEFT adapter and manifest; conversion to a directly loadable .litertlm model is a separate step.",color=Muted,style=MaterialTheme.typography.bodySmall)
  }
 }
 
