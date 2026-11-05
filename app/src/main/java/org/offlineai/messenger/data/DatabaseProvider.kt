@@ -129,7 +129,7 @@ object DatabaseProvider {
             AppDatabase::class.java,
             LEGACY_NAME
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .build()
 
@@ -146,7 +146,7 @@ object DatabaseProvider {
         try {
             val source = legacy.openHelper.writableDatabase
             val target = encryptedTemp.openHelper.writableDatabase
-            val tables = listOf("conversations", "messages", "local_models", "workspace_projects")
+            val tables = listOf("conversations", "messages", "local_models", "workspace_projects", "knowledge_chunks")
             target.beginTransaction()
             try {
                 tables.forEach { table -> copyTable(source, target, table) }
