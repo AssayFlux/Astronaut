@@ -127,7 +127,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    try{
     val report=datasetReport?:error("Import and validate a dataset first.")
     val invalid=report.invalidLines.toSet()
-    val clean=datasetContent.lineSequence().mapIndexedNotNull{index,line->if(line.isNotBlank()&&index+1 !in invalid)line else null}.joinToString("\\n")
+    val clean=datasetContent.lineSequence().mapIndexedNotNull{index,line->if(line.isNotBlank()&&index+1 !in invalid)line else null}.joinToString("\n")
     withContext(Dispatchers.IO){context.contentResolver.openOutputStream(uri)?.use{it.write(clean.toByteArray(Charsets.UTF_8))}?:error("Cannot create dataset output file.")}
     datasetStatus="Exported "+report.validRecords+" valid JSONL records."
    }catch(error:Throwable){datasetStatus="Dataset export failed: "+(error.message?:error.javaClass.simpleName)}
@@ -181,7 +181,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
            val analyzer=OfflineImageAnalyzer(context)
            try{analyzer.analyze(selected.first)}finally{analyzer.close()}
           }else ""
-          listOf(extractedText,imageLabels).filter{it.isNotBlank()}.joinToString("\\n\\n").take(100_000).also{require(it.isNotBlank()){"No readable text or image labels were found."}}
+          listOf(extractedText,imageLabels).filter{it.isNotBlank()}.joinToString("\n\n").take(100_000).also{require(it.isNotBlank()){"No readable text or image labels were found."}}
          }
          if(extractedAttachment!=null) db.chatDao().updateAttachmentText(userMessageId,extractedAttachment)
          if(messages.isEmpty()&&(text.isNotEmpty()||attachment!=null)) db.chatDao().rename(target,(text.ifBlank{attachment?.second.orEmpty()}).take(42))
@@ -231,10 +231,10 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
         when(result){
          is CollaborationResult.Success->{
           val report=buildString{
-           append("TWO-MODEL REVIEW\\n\\n")
+           append("TWO-MODEL REVIEW\n\n")
            result.participants.forEachIndexed{index,answer->
-            append("Independent model ").append(index+1).append(": ").append(answer.modelId).append(" (").append(answer.elapsedMs).append(" ms)\\n")
-            append(answer.text).append("\\n\\n")
+            append("Independent model ").append(index+1).append(": ").append(answer.modelId).append(" (").append(answer.elapsedMs).append(" ms)\n")
+            append(answer.text).append("\n\n")
            }
            append("COORDINATOR SYNTHESIS\\n").append(result.finalAnswer)
           }
