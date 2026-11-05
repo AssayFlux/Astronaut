@@ -10,6 +10,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URI
 import java.security.MessageDigest
 import javax.net.ssl.HttpsURLConnection
 
@@ -31,8 +32,14 @@ class VerifiedModelDownloader(context: Context) {
         require(safeName.isNotBlank() && allowedExtensions.any { safeName.endsWith(it, true) }) {
             "Unsupported model artifact extension. Supported: " + allowedExtensions.joinToString()
         }
-        var currentUrl = URL(sourceUrl)
-        require(currentUrl.protocol.equals("https", true)) { "Model downloads require HTTPS." }
+        val sourceUri = URI(sourceUrl)
+        require(
+            sourceUri.scheme.equals("https", true) &&
+                !sourceUri.host.isNullOrBlank() &&
+                sourceUri.userInfo == null &&
+                sourceUri.fragment == null
+        ) { "Model downloads require a valid HTTPS URL without embedded credentials or fragments." }
+        var currentUrl = sourceUri.toURL()
         val digestKey = expectedSha256.lowercase()
         val partial = File(modelDirectory, ".$digestKey.part")
         val target = File(modelDirectory, digestKey.take(16) + "-" + safeName)
@@ -59,7 +66,13 @@ class VerifiedModelDownloader(context: Context) {
                     val location = candidate.getHeaderField("Location") ?: error("Redirect has no destination.")
                     require(redirects++ < 3) { "Too many model download redirects." }
                     val redirected = URL(currentUrl, location)
-                    require(redirected.protocol.equals("https", true)) { "Redirects to non-HTTPS destinations are blocked." }
+                    val redirectedUri = URI(redirected.toString())
+                    require(
+                        redirectedUri.scheme.equals("https", true) &&
+                            !redirectedUri.host.isNullOrBlank() &&
+                            redirectedUri.userInfo == null &&
+                            redirectedUri.fragment == null
+                    ) { "Redirects must remain on valid HTTPS URLs without embedded credentials or fragments." }
                     candidate.disconnect(); connection = null; currentUrl = redirected
                     continue
                 }
