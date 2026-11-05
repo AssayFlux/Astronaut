@@ -10,7 +10,7 @@ import net.i2p.crypto.eddsa.spec.EdDSAPublicKeySpec
 import java.security.MessageDigest
 import java.util.Base64
 
-enum class ModelCapability { CHAT, CODE, VISION, AUDIO_TRANSCRIPTION, EMBEDDING, IMAGE_GENERATION }
+enum class ModelCapability { CHAT, CODE, VISION, AUDIO_TRANSCRIPTION, SPEECH_SYNTHESIS, EMBEDDING, RERANKING, CLASSIFICATION, IMAGE_GENERATION }
 
 data class ModelCatalogEntry(
     val id: String,
@@ -107,15 +107,27 @@ object ModelCatalogParser {
         val licenseUrl = json.getString("license_url")
         require(isHttps(download) && isHttps(licenseUrl)) { "Model $id must use HTTPS for downloads and license links." }
         val fileName = json.getString("file_name")
-        require(fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}\\.litertlm$", RegexOption.IGNORE_CASE))) {
-            "Model $id must reference a safe .litertlm filename."
+        require(fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}$")) && fileName.contains('.')) {
+            "Model $id must reference a safe filename with an extension."
         }
-        val format = json.getString("format")
-        require(format == "litertlm") { "Unsupported mobile model format for $id: $format" }
-        val runtime = json.getString("runtime")
-        require(runtime == "litertlm") { "Unsupported runtime for $id: $runtime" }
+        val format = json.getString("format").lowercase()
+        val runtime = json.getString("runtime").lowercase()
+        val allowed = mapOf(
+            "litertlm" to ("litertlm" to setOf(".litertlm")),
+            "gguf" to ("llama.cpp" to setOf(".gguf")),
+            "onnx" to ("onnx-runtime" to setOf(".onnx")),
+            "tflite" to ("litert" to setOf(".tflite")),
+            "diffusion_bundle" to ("mnn-diffusion" to setOf(".zip", ".safetensors")),
+            "whisper_model" to ("whisper.cpp" to setOf(".bin", ".ggml", ".gguf")),
+            "sherpa_onnx" to ("sherpa-onnx" to setOf(".onnx", ".zip"))
+        )
+        val spec = allowed[format] ?: error("Unsupported artifact format for $id: $format")
+        require(runtime == spec.first) { "Format $format requires runtime " + spec.first + ", not $runtime." }
+        require(spec.second.any { fileName.endsWith(it, ignoreCase = true) }) {
+            "Filename extension does not match declared format $format."
+        }
         val size = json.getLong("size_bytes")
-        require(size in 1..(8L * 1024 * 1024 * 1024)) { "Model $id exceeds the supported 8 GiB size limit." }
+        require(size in 1..15_000_000_000L) { "Model $id exceeds the 15 GB integration limit." }
         val minSdk = json.getInt("min_sdk")
         val minRam = json.getInt("min_ram_mb")
         require(minSdk in 26..100 && minRam in 256..262144) { "Invalid device requirements for $id." }
