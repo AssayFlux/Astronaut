@@ -11,7 +11,7 @@ data class LocalModelEntity(@PrimaryKey val uri:String,val displayName:String,va
 data class WorkspaceProjectEntity(@PrimaryKey(autoGenerate=true) val id:Long=0,val name:String,val description:String="",val createdAt:Long=System.currentTimeMillis(),val updatedAt:Long=System.currentTimeMillis())
 
 /** Encrypted Room row containing one source-labelled chunk and its local embedding vector. */
-@Entity(tableName="knowledge_chunks",indices=[Index("source"),Index("embeddingModelId")])
+@Entity(tableName="knowledge_chunks",indices=[Index("source"),Index("embeddingModelId"),Index("scopeId")])
 data class KnowledgeChunkEntity(
  @PrimaryKey val id:String,
  val source:String,
@@ -19,6 +19,7 @@ data class KnowledgeChunkEntity(
  val pageNumber:Int?,
  val text:String,
  val embeddingModelId:String,
+ val scopeId:String,
  val embedding:ByteArray,
  val createdAt:Long=System.currentTimeMillis()
 )
@@ -38,10 +39,10 @@ data class KnowledgeChunkEntity(
 }
 @Dao interface KnowledgeDao {
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun upsert(chunks:List<KnowledgeChunkEntity>)
- @Query("SELECT * FROM knowledge_chunks WHERE embeddingModelId=:modelId ORDER BY source,chunkIndex") suspend fun chunksForModel(modelId:String):List<KnowledgeChunkEntity>
- @Query("DELETE FROM knowledge_chunks WHERE source=:source AND embeddingModelId=:modelId") suspend fun deleteSource(source:String,modelId:String)
- @Query("DELETE FROM knowledge_chunks WHERE embeddingModelId=:modelId") suspend fun clearModel(modelId:String)
- @Query("SELECT COUNT(*) FROM knowledge_chunks WHERE embeddingModelId=:modelId") suspend fun countForModel(modelId:String):Int
+ @Query("SELECT * FROM knowledge_chunks WHERE embeddingModelId=:modelId AND scopeId=:scopeId ORDER BY source,chunkIndex") suspend fun chunksForModel(modelId:String,scopeId:String):List<KnowledgeChunkEntity>
+ @Query("DELETE FROM knowledge_chunks WHERE source=:source AND embeddingModelId=:modelId AND scopeId=:scopeId") suspend fun deleteSource(source:String,modelId:String,scopeId:String)
+ @Query("DELETE FROM knowledge_chunks WHERE embeddingModelId=:modelId AND scopeId=:scopeId") suspend fun clearModel(modelId:String,scopeId:String)
+ @Query("SELECT COUNT(*) FROM knowledge_chunks WHERE embeddingModelId=:modelId AND scopeId=:scopeId") suspend fun countForModel(modelId:String,scopeId:String):Int
 }
 @Dao interface ModelDao {
  @Query("SELECT * FROM local_models ORDER BY importedAt DESC") fun models():Flow<List<LocalModelEntity>>
