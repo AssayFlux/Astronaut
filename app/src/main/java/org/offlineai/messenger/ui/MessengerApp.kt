@@ -56,6 +56,9 @@ import org.offlineai.messenger.features.OfflineDatasetInspector
 import org.offlineai.messenger.features.DatasetReport
 import org.offlineai.messenger.features.TrainingApiClient
 import org.offlineai.messenger.features.TrainingJobStatus
+import org.offlineai.messenger.features.OpenAiCompatibleClient
+import org.offlineai.messenger.features.RemoteChatMessage
+import org.offlineai.messenger.features.EncryptedSecretStore
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
@@ -64,7 +67,7 @@ private val Paper=Color(0xFFF4F2EA)
 private val Ink=Color(0xFF17231F)
 private val Green=Color(0xFF176B55)
 private val Muted=Color(0xFF65736D)
-private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MODELS("Models"),TRAINING("Training"),WORKSPACE("Workspace"),SETTINGS("Settings")}
+private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MODELS("Models"),TRAINING("Training"),WORKSPACE("Workspace"),ONLINE_AI("Online AI"),SETTINGS("Settings")}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun MessengerApp(){
@@ -84,6 +87,13 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  val personalizationPrefs=remember(context){context.getSharedPreferences("astronaut_personalization",Context.MODE_PRIVATE)}
  var responseStyle by remember{mutableStateOf(personalizationPrefs.getString("response_style","balanced")?:"balanced")}
  var darkAppearance by remember{mutableStateOf(personalizationPrefs.getBoolean("dark_appearance",false))}
+ val onlinePrefs=remember(context){context.getSharedPreferences("astronaut_online_ai",Context.MODE_PRIVATE)}
+ val secretStore=remember(context){EncryptedSecretStore(context)}
+ var onlineBaseUrl by remember{mutableStateOf(onlinePrefs.getString("base_url","")?:"")}
+ var onlineModelId by remember{mutableStateOf(onlinePrefs.getString("model_id","")?:"")}
+ var onlineEnabled by remember{mutableStateOf(onlinePrefs.getBoolean("enabled",false))}
+ var onlineHasKey by remember{mutableStateOf(runCatching{!secretStore.get("online_api_key").isNullOrBlank()}.getOrDefault(false))}
+ var onlineStatus by remember{mutableStateOf("Online AI is disabled. Configure a provider and explicitly enable it to use remote inference.")}
  var voiceListening by remember{mutableStateOf(false)}
  val speechPrefs=remember(context){context.getSharedPreferences("astronaut_offline_speech",Context.MODE_PRIVATE)}
  var speechLanguageTag by remember{mutableStateOf(speechPrefs.getString("language_tag",java.util.Locale.getDefault().toLanguageTag())?:java.util.Locale.getDefault().toLanguageTag())}
@@ -245,12 +255,12 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    Text(section.label,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.SemiBold)
   }},actions={if(section==Section.CHATS) IconButton(onClick={scope.launch{selectedConversation=db.chatDao().addConversation(ConversationEntity(title="New conversation"))}}){Icon(Icons.Default.Add,"New chat")}},colors=TopAppBarDefaults.topAppBarColors(containerColor=MaterialTheme.colorScheme.background))},
    bottomBar={NavigationBar(containerColor=MaterialTheme.colorScheme.surface){Section.entries.forEach{item->
-    val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.TRAINING->Icons.Default.Tune;Section.WORKSPACE->Icons.Default.FolderOpen;Section.SETTINGS->Icons.Default.Settings}
+    val icon=when(item){Section.CHATS->Icons.Default.ChatBubbleOutline;Section.AI_HUB->Icons.Default.Hub;Section.MODELS->Icons.Default.Memory;Section.TRAINING->Icons.Default.Tune;Section.WORKSPACE->Icons.Default.FolderOpen;Section.ONLINE_AI->Icons.Default.Cloud;Section.SETTINGS->Icons.Default.Settings}
     NavigationBarItem(selected=section==item,onClick={section=item},icon={Icon(icon,item.label)},label={Text(item.label,maxLines=1)})
    }}}
   ){padding->Column(Modifier.fillMaxSize().padding(padding)){
    when(section){
-    Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,activeModelName,runtimeMessage,loadingModel,sending,voiceListening,
+    Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,activeModelName,runtimeMessage,loadingModel,sending,voiceListening,onlineEnabled,
      {if(voiceListening)voiceController.stopListening()else if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)voiceController.startListening()else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)},
      {text->voiceController.speak(text)} ,
      {attachmentPicker.launch(arrayOf("*/*"))},{pendingAttachment=null},{selectedConversation=it},{id->scope.launch{
@@ -263,6 +273,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
        sending=true
        scope.launch{
         try{
+         require(!onlineEnabled||attachment==null){"Online AI mode sends text only. Remove the attachment or switch back to offline mode."}
          val userMessageId=db.chatDao().addMessage(MessageEntity(conversationId=target,body=text,role="user",attachmentUri=attachment?.first?.toString(),attachmentName=attachment?.second))
          val extractedAttachment = attachment?.let { selected ->
           val mime=context.contentResolver.getType(selected.first)
@@ -282,7 +293,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
          }
          if(extractedAttachment!=null) db.chatDao().updateAttachmentText(userMessageId,extractedAttachment)
          if(messages.isEmpty()&&(text.isNotEmpty()||attachment!=null)) db.chatDao().rename(target,(text.ifBlank{attachment?.second.orEmpty()}).take(42))
-         if(activeModelPath==null){
+         if(activeModelPath==null&&!onlineEnabled){
           db.chatDao().addMessage(MessageEntity(conversationId=target,body="No AI model is loaded. Open Models, import a compatible .litertlm file, then tap Load model. Your message and extracted attachment text are saved on this device.",role="assistant"))
          }else if(text.isNotEmpty()||attachment!=null){
           try{
@@ -328,7 +339,12 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
              listOf(".png",".jpg",".jpeg",".webp",".bmp",".gif",".heic",".heif").any(name::endsWith)
             }
            }
-           val answer=if(selectedImage!=null&&activeModelVision){
+           val answer=if(onlineEnabled){
+            val key=secretStore.get("online_api_key")?:error("Online API key is missing. Reconfigure Online AI.")
+            OpenAiCompatibleClient(onlineBaseUrl,key,onlineModelId).complete(
+             listOf(RemoteChatMessage("user",question)),maxTokens=2048
+            )
+           }else if(selectedImage!=null&&activeModelVision){
             val prepared=withContext(Dispatchers.IO){
              VisionImagePreprocessor.prepare(context,selectedImage.first,selectedImage.second)
             }
@@ -479,6 +495,41 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
       section=Section.CHATS
      }
     },{id->scope.launch{db.workspaceDao().delete(id)}})
+    Section.ONLINE_AI->OnlineAiScreen(
+     onlineBaseUrl,onlineModelId,onlineHasKey,onlineEnabled,onlineStatus,
+     {url,model,key->
+      try{
+       require(url.startsWith("https://",true)){"Use an HTTPS provider URL."}
+       require(model.isNotBlank()){"Enter the provider's exact model ID."}
+       require(key.length>=8){"Enter a valid API key."}
+       OpenAiCompatibleClient(url,key,model)
+       onlinePrefs.edit().putString("base_url",url.trim()).putString("model_id",model.trim()).apply()
+       secretStore.put("online_api_key",key.trim())
+       onlineBaseUrl=url.trim();onlineModelId=model.trim();onlineHasKey=true
+       onlineStatus="Provider configuration saved securely. Test the connection before enabling online mode."
+      }catch(error:Throwable){onlineStatus="Could not save provider: "+(error.message?:error.javaClass.simpleName)}
+     },
+     {enabled->
+      onlineEnabled=enabled
+      onlinePrefs.edit().putBoolean("enabled",enabled).apply()
+      onlineStatus=if(enabled)"ONLINE MODE ENABLED. Only the current text prompt is sent; local history and attachments are not uploaded." else "Online mode disabled. Chat will use the local model."
+     },
+     {
+      secretStore.remove("online_api_key");onlineHasKey=false;onlineEnabled=false
+      onlinePrefs.edit().putBoolean("enabled",false).apply()
+      onlineStatus="API key removed and online mode disabled."
+     },
+     {
+      scope.launch{
+       onlineStatus="Testing provider connection…"
+       try{
+        val key=secretStore.get("online_api_key")?:error("Save an API key first.")
+        val answer=OpenAiCompatibleClient(onlineBaseUrl,key,onlineModelId).complete(listOf(RemoteChatMessage("user","Reply with OK.")),maxTokens=16)
+        onlineStatus="Connection successful. Provider replied: "+answer.take(120)
+       }catch(error:Throwable){onlineStatus="Provider test failed: "+(error.message?:error.javaClass.simpleName)}
+      }
+     }
+    )
     Section.SETTINGS->SettingsScreen(
      speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,responseStyle,darkAppearance,
      {style->responseStyle=style;personalizationPrefs.edit().putString("response_style",style).apply()},
@@ -508,7 +559,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }){Text("Create")}},dismissButton={TextButton(onClick={showNewProject=false}){Text("Cancel")}})
 }
 
-@Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,activeModelName:String?,runtimeMessage:String,loading:Boolean,sending:Boolean,voiceListening:Boolean,onVoice:()->Unit,onSpeak:(String)->Unit,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onDelete:(Long)->Unit,onSend:()->Unit){
+@Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,activeModelName:String?,runtimeMessage:String,loading:Boolean,sending:Boolean,voiceListening:Boolean,onVoice:()->Unit,onSpeak:(String)->Unit,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onDelete:(Long)->Unit,onlineEnabled:Boolean,onSend:()->Unit){
  var pendingDelete by remember{mutableStateOf<Long?>(null)}
  Column(Modifier.fillMaxSize().padding(horizontal=16.dp)){
   if(conversations.isNotEmpty()) LazyColumn(Modifier.heightIn(max=140.dp),verticalArrangement=Arrangement.spacedBy(2.dp)){items(conversations,key={it.id}){chat->Row(verticalAlignment=Alignment.CenterVertically){TextButton(onClick={onSelect(chat.id)},modifier=Modifier.weight(1f)){Text((if(chat.id==selectedId)"●  " else "")+chat.title,maxLines=1,overflow=TextOverflow.Ellipsis)};IconButton(onClick={pendingDelete=chat.id}){Icon(Icons.Default.DeleteOutline,"Delete conversation")}}}}
@@ -544,7 +595,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     IconButton(onClick=onSend,enabled=!sending&&(draft.isNotBlank()||attachmentName!=null)){if(sending)CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)else Icon(Icons.Default.Send,"Send",tint=Green)}
    }
   }
-  Text("Offline inference "+(if(activeModelName!=null)"· "+activeModelName else "· no model loaded"),style=MaterialTheme.typography.labelSmall,color=Muted,modifier=Modifier.padding(top=6.dp,bottom=8.dp))
+  Text((if(onlineEnabled)"ONLINE inference · "+onlineModelLabelPlaceholder() else "Offline inference "+(if(activeModelName!=null)"· "+activeModelName else "· no model loaded")),style=MaterialTheme.typography.labelSmall,color=Muted,modifier=Modifier.padding(top=6.dp,bottom=8.dp))
  }
 }
 
