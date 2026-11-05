@@ -56,7 +56,8 @@ private enum class Section(val label:String){CHATS("Chats"),MODELS("Models"),WOR
  val models by db.modelDao().models().collectAsState(initial=emptyList())
  val projects by db.workspaceDao().projects().collectAsState(initial=emptyList())
  val conversationId=selectedConversation?:conversations.firstOrNull()?.id
- val messages by db.chatDao().messages(conversationId?:-1L).collectAsState(initial=emptyList())
+ val allMessages by db.chatDao().messages(conversationId?:-1L).collectAsState(initial=emptyList())
+ val messages=allMessages.filter{it.conversationId==conversationId}
  DisposableEffect(runtime){onDispose{runtime.close()}}
  LaunchedEffect(conversations,selectedConversation){
   if(selectedConversation!=null && conversations.none{it.id==selectedConversation}) selectedConversation=null
