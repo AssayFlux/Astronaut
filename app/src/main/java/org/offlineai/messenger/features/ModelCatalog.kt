@@ -115,7 +115,7 @@ object ModelCatalogParser {
         val allowed = mapOf(
             "litertlm" to ("litertlm" to setOf(".litertlm")),
             "gguf" to ("llama.cpp" to setOf(".gguf")),
-            "onnx" to ("onnx-runtime" to setOf(".onnx")),
+            "onnx" to ("onnx-runtime-embeddings" to setOf(".onnx")),
             "tflite" to ("litert" to setOf(".tflite")),
             "diffusion_bundle" to ("mnn-diffusion" to setOf(".zip", ".safetensors")),
             "whisper_model" to ("whisper.cpp" to setOf(".bin", ".ggml", ".gguf")),
