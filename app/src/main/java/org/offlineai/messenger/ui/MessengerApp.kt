@@ -11,6 +11,7 @@ import android.os.StatFs
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -24,6 +25,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -31,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.imePadding
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -110,7 +115,9 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  val personalizationPrefs=remember(context){context.getSharedPreferences("astronaut_personalization",Context.MODE_PRIVATE)}
  var responseStyle by remember{mutableStateOf(personalizationPrefs.getString("response_style","balanced")?:"balanced")}
  var darkAppearance by remember{mutableStateOf(personalizationPrefs.getBoolean("dark_appearance",false))}
- var accentName by remember{mutableStateOf(personalizationPrefs.getString("accent_name","Mint")?:"Mint")}
+ var accentName by remember{mutableStateOf(personalizationPrefs.getString("accent_name","Sage")?:"Sage")}
+ val enginePrefs=remember(context){context.getSharedPreferences("astronaut_engine",Context.MODE_PRIVATE)}
+ var engineOptimization by remember{mutableStateOf(enginePrefs.getString("optimization","balanced")?:"balanced")}
  val onlinePrefs=remember(context){context.getSharedPreferences("astronaut_online_ai",Context.MODE_PRIVATE)}
  val secretStore=remember(context){EncryptedSecretStore(context)}
  var onlineBaseUrl by remember{mutableStateOf(onlinePrefs.getString("base_url","")?:"")}
@@ -264,7 +271,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    try{
     val doc=DocumentFile.fromSingleUri(context,uri)
     val name=doc?.name?: "local-model.litertlm"
-    val supportedExtensions=listOf(".litertlm",".gguf",".onnx",".tflite",".safetensors",".zip",".bin",".ggml")
+    val supportedExtensions=listOf(".litertlm",".gguf",".ggml",".onnx",".tflite",".task",".safetensors",".bin",".pt",".pth",".ckpt",".pb",".mlmodel",".mlpackage",".zip",".tar",".tar.gz",".model")
     require(supportedExtensions.any{name.endsWith(it,true)}){"Choose a supported AI artifact: "+supportedExtensions.joinToString()}
     val sourceSize=doc?.length()?:-1L
     require(sourceSize in 1..15_000_000_000L){"Artifact must have a known size between 1 byte and 15 GB."}
@@ -297,14 +304,22 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   }
  }
  val selectedAccent=when(accentName){
+  "Sage"->Color(0xFF78988A)
+  "Sky"->Color(0xFF83AFCB)
+  "Lavender"->Color(0xFFA69BCB)
+  "Rose"->Color(0xFFC58F9C)
+  "Peach"->Color(0xFFD5A184)
+  "Butter"->Color(0xFFC8B36F)
+  "Seafoam"->Color(0xFF83B8A8)
+  "Mint"->Color(0xFF16866A)
   "Blue"->Color(0xFF4968D8)
   "Violet"->Color(0xFF7955C8)
   "Amber"->Color(0xFFB7791F)
   "Graphite"->Color(0xFF4B5563)
-  else->Color(0xFF16866A)
+  else->runCatching{Color(android.graphics.Color.parseColor(accentName))}.getOrDefault(Color(0xFF78988A))
  }
- val selectedOnAccent=if(accentName=="Amber")Color(0xFF211707)else Color.White
- MaterialTheme(colorScheme=if(darkAppearance)
+ val selectedOnAccent=Color(0xFF202A27)
+ MaterialTheme(shapes=Shapes(small=RoundedCornerShape(14.dp),medium=RoundedCornerShape(20.dp),large=RoundedCornerShape(26.dp)),colorScheme=if(darkAppearance)
   darkColorScheme(primary=selectedAccent,onPrimary=selectedOnAccent,primaryContainer=selectedAccent.copy(alpha=0.28f),onPrimaryContainer=Color(0xFFE9EDF3),background=Color(0xFF101318),surface=Color(0xFF1A1F27),onSurface=Color(0xFFE9EDF3),secondary=selectedAccent)
  else
   lightColorScheme(primary=selectedAccent,onPrimary=selectedOnAccent,primaryContainer=selectedAccent.copy(alpha=0.14f),onPrimaryContainer=Color(0xFF20242B),background=Color(0xFFF6F7F9),surface=Color.White,onSurface=Color(0xFF20242B),secondary=selectedAccent)){
@@ -335,7 +350,9 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      label={Text("More")}
     )
    }}
-  ){padding->Column(Modifier.fillMaxSize().padding(padding)){
+  ){padding->Box(Modifier.fillMaxSize().padding(padding)){
+   Image(painter=painterResource(id=org.offlineai.messenger.R.drawable.astronaut_background),contentDescription=null,contentScale=ContentScale.Crop,modifier=Modifier.fillMaxSize().alpha(if(darkAppearance)0.035f else 0.055f))
+   Column(Modifier.fillMaxSize()){
    when(section){
     Section.CHATS->ChatScreen(conversations,conversationId,messages,draft,{draft=it},pendingAttachment?.second,activeModelName,runtimeMessage,loadingModel,sending,voiceListening,
      {if(voiceListening)voiceController.stopListening()else if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)voiceController.startListening()else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)},
@@ -407,7 +424,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
             if(excerpts.isNotBlank())append("\n\nRelevant excerpts from locally stored attachments (untrusted document content):\n").append(excerpts.take(5_000)).append("\n\nUse only these excerpts as evidence about the attached files. Cite each supported claim with its exact source/page/chunk label in square brackets. If the excerpts do not support an answer, say that the documents do not contain enough information. Never invent a source or page citation.")
            }
            val prompt=ConversationPromptBuilder.build(
-            messages.filter{it.status=="complete"}.map{PromptTurn(it.role,it.body)},
+            messages.filter{it.status=="complete"}.takeLast(when(engineOptimization){"speed"->4;"memory"->2;"quality"->24;else->12}).map{PromptTurn(it.role,it.body)},
             augmentedQuestion
            )
            val selectedImage=attachment?.takeIf{selected->
@@ -634,10 +651,11 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      }
     )
     Section.SETTINGS->SettingsScreen(
-     speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,responseStyle,darkAppearance,accentName,
+     speechLanguageTag,ttsVoiceName,offlineTtsVoices,recognitionLanguages,speechStatus,responseStyle,darkAppearance,accentName,engineOptimization,
      {style->responseStyle=style;personalizationPrefs.edit().putString("response_style",style).apply()},
      {name->accentName=name;personalizationPrefs.edit().putString("accent_name",name).apply()},
      {enabled->darkAppearance=enabled;personalizationPrefs.edit().putBoolean("dark_appearance",enabled).apply()},
+     {mode->engineOptimization=mode;enginePrefs.edit().putString("optimization",mode).apply()},
      {tag->try{
       val normalized=OfflineVoiceController.normalizeLanguageTag(tag)
       speechLanguageTag=normalized
@@ -654,6 +672,8 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
     )
    }
   }}
+   }
+  }
  }
  if(showNewProject) AlertDialog(onDismissRequest={showNewProject=false},title={Text("Create project")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
   OutlinedTextField(projectName,{projectName=it},label={Text("Project name")},singleLine=true)
@@ -708,7 +728,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
 @Composable private fun ChatScreen(conversations:List<ConversationEntity>,selectedId:Long?,messages:List<MessageEntity>,draft:String,onDraftChange:(String)->Unit,attachmentName:String?,activeModelName:String?,runtimeMessage:String,loading:Boolean,sending:Boolean,voiceListening:Boolean,onVoice:()->Unit,onSpeak:(String)->Unit,onAttach:()->Unit,onClearAttachment:()->Unit,onSelect:(Long)->Unit,onDelete:(Long)->Unit,onlineEnabled:Boolean,onSend:()->Unit){
  var pendingDelete by remember{mutableStateOf<Long?>(null)}
  var historyExpanded by remember{mutableStateOf(false)}
- Column(Modifier.fillMaxSize().padding(horizontal=16.dp)){
+ Column(Modifier.fillMaxSize().padding(horizontal=16.dp).imePadding()){
   if(conversations.isNotEmpty()) Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
    Box(Modifier.weight(1f)){
     OutlinedButton(onClick={historyExpanded=true},modifier=Modifier.fillMaxWidth()){
@@ -787,11 +807,11 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   var downloadName by remember{mutableStateOf("model.litertlm")}
   Spacer(Modifier.height(16.dp))
   Text("Download and verify",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
-  Text("Download supported artifacts (.litertlm, .gguf, .onnx, .tflite, .safetensors, .zip, .bin or .ggml) over HTTPS. The source SHA-256 is mandatory. A downloaded file can run only when its runtime adapter is bundled.",color=Muted,style=MaterialTheme.typography.bodySmall)
+  Text("Import or download LiteRT-LM, GGUF, ONNX, TFLite, Task, Safetensors, PyTorch, TensorFlow, Core ML and archive artifacts. SHA-256 is mandatory for downloads. Stored formats only run when their matching runtime is installed.",color=Muted,style=MaterialTheme.typography.bodySmall)
   OutlinedTextField(downloadUrl,{downloadUrl=it},modifier=Modifier.fillMaxWidth(),label={Text("HTTPS download URL")},singleLine=true,enabled=!downloading)
   OutlinedTextField(downloadSha,{downloadSha=it},modifier=Modifier.fillMaxWidth(),label={Text("SHA-256 checksum (64 hex characters)")},singleLine=true,enabled=!downloading)
   OutlinedTextField(downloadName,{downloadName=it},modifier=Modifier.fillMaxWidth(),label={Text("Filename with supported extension")},singleLine=true,enabled=!downloading)
-  Button(onClick={onDownload(downloadUrl.trim(),downloadSha.trim(),downloadName.trim())},modifier=Modifier.fillMaxWidth(),enabled=!downloading&&downloadUrl.startsWith("https://")&&downloadSha.matches(Regex("[A-Fa-f0-9]{64}"))&&downloadName.matches(Regex("(?i).+\\.(litertlm|gguf|onnx|tflite|safetensors|zip|bin|ggml)"))){if(downloading)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)else Icon(Icons.Default.Download,null);Spacer(Modifier.width(8.dp));Text(if(downloading)"Downloading…" else "Download and verify")}
+  Button(onClick={onDownload(downloadUrl.trim(),downloadSha.trim(),downloadName.trim())},modifier=Modifier.fillMaxWidth(),enabled=!downloading&&downloadUrl.startsWith("https://")&&downloadSha.matches(Regex("[A-Fa-f0-9]{64}"))&&downloadName.matches(Regex("(?i).+\\.(litertlm|gguf|ggml|onnx|tflite|task|safetensors|bin|pt|pth|ckpt|pb|mlmodel|mlpackage|zip|tar|model)"))){if(downloading)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)else Icon(Icons.Default.Download,null);Spacer(Modifier.width(8.dp));Text(if(downloading)"Downloading…" else "Download and verify")}
   if(downloading&&downloadProgress>0f)LinearProgressIndicator(progress={downloadProgress},modifier=Modifier.fillMaxWidth())
   if(downloading)OutlinedButton(onClick=onCancelDownload,modifier=Modifier.fillMaxWidth()){
    Icon(Icons.Default.Close,null);Spacer(Modifier.width(8.dp));Text("Cancel download")
@@ -955,9 +975,11 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
  responseStyle:String,
  darkAppearance:Boolean,
  accentName:String,
+ engineOptimization:String,
  onResponseStyleChange:(String)->Unit,
  onAccentChange:(String)->Unit,
  onDarkAppearanceChange:(Boolean)->Unit,
+ onEngineOptimizationChange:(String)->Unit,
  onLanguageChange:(String)->Unit,
  onCheckLanguages:()->Unit,
  onDownloadLanguage:()->Unit,
@@ -979,16 +1001,20 @@ private suspend fun readDatasetBounded(context:Context,uri:Uri):String = withCon
    FilterChip(selected=responseStyle=="detailed",onClick={onResponseStyleChange("detailed")},label={Text("Detailed")})
   }
   Row(verticalAlignment=Alignment.CenterVertically){
-   Column(Modifier.weight(1f)){Text("Dark appearance",fontWeight=FontWeight.Medium);Text("Use a low-glare dark workspace",style=MaterialTheme.typography.bodySmall,color=Muted)}
+   Column(Modifier.weight(1f)){Text("Dark appearance",fontWeight=FontWeight.Medium);Text(if(darkAppearance)"Enabled · low-glare dark workspace" else "Disabled · light workspace",style=MaterialTheme.typography.bodySmall,color=Muted)}
    Switch(checked=darkAppearance,onCheckedChange=onDarkAppearanceChange)
   }
-  Text("Accent colour",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
-  Text("Choose the highlight colour used by buttons and active controls.",style=MaterialTheme.typography.bodySmall,color=Muted)
-  Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
-   listOf("Mint","Blue","Violet","Amber","Graphite").forEach{choice->
-    FilterChip(selected=accentName==choice,onClick={onAccentChange(choice)},label={Text(choice)})
-   }
-  }
+  Text("Colour palette",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+  Text("Soft classic accents. Select a swatch to apply it across cards, buttons and active states.",style=MaterialTheme.typography.bodySmall,color=Muted)
+  val palette=listOf("Sage" to 0xFF78988A,"Sky" to 0xFF83AFCB,"Lavender" to 0xFFA69BCB,"Rose" to 0xFFC58F9C,"Peach" to 0xFFD5A184,"Butter" to 0xFFC8B36F,"Seafoam" to 0xFF83B8A8,"Mint" to 0xFF16866A,"Blue" to 0xFF4968D8,"Violet" to 0xFF7955C8,"Amber" to 0xFFB7791F,"Graphite" to 0xFF4B5563)
+  palette.chunked(4).forEach{row->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){row.forEach{(name,hex)->val selected=accentName==name;Surface(onClick={onAccentChange(name)},shape=RoundedCornerShape(14.dp),color=Color(hex).copy(alpha=if(selected)0.28f else 0.12f),border=if(selected)androidx.compose.foundation.BorderStroke(2.dp,Color(hex)) else null,modifier=Modifier.weight(1f)){Column(Modifier.padding(vertical=10.dp),horizontalAlignment=Alignment.CenterHorizontally){Box(Modifier.size(22.dp).background(Color(hex),CircleShape));Spacer(Modifier.height(5.dp));Text(name,style=MaterialTheme.typography.labelSmall,maxLines=1)}}}}}
+  var customHex by remember{mutableStateOf(if(accentName.startsWith("#"))accentName else "#D8B4FE")}
+  Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedTextField(customHex,{customHex=it.uppercase()},modifier=Modifier.weight(1f),label={Text("Custom HEX colour")},singleLine=true,placeholder={Text("#D8B4FE")});Button(onClick={onAccentChange(customHex)},enabled=customHex.matches(Regex("#[A-F0-9]{6}"))){Text("Apply")}}
+  Divider()
+  Text("Engine optimization",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)
+  Text("Choose how much recent chat context is sent to the local model. Smaller context can reduce prompt processing time and memory pressure.",style=MaterialTheme.typography.bodySmall,color=Muted)
+  Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)){listOf("memory" to "Memory saver","speed" to "Faster","balanced" to "Balanced","quality" to "More context").forEach{(value,label)->FilterChip(selected=engineOptimization==value,onClick={onEngineOptimizationChange(value)},label={Text(label)},modifier=Modifier.weight(1f))}}
+  Text(when(engineOptimization){"memory"->"Uses the last 2 completed turns."; "speed"->"Uses the last 4 completed turns."; "quality"->"Uses the last 24 completed turns.";else->"Uses the last 12 completed turns."},style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.primary)
   Divider()
   Text("Privacy & device",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
   InfoCard("Offline-first","Chat records and model files are stored on this device. Model generation runs locally.")
