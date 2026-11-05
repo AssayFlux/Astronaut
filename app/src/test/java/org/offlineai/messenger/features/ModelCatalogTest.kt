@@ -1,9 +1,12 @@
 package org.offlineai.messenger.features
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Base64
+import java.security.KeyPairGenerator
+import java.security.Signature
 
 class ModelCatalogTest {
     private fun modelJson(
@@ -69,6 +72,7 @@ class ModelCatalogTest {
     }
 }
 
+class Ed25519CatalogVerifierTest {
     @Test
     fun ed25519VerifierAcceptsAuthenticSignatureAndRejectsTampering() {
         val pair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
@@ -82,3 +86,4 @@ class ModelCatalogTest {
         assertTrue(verifier.verify(payload, signature))
         assertFalse(verifier.verify(payload + byteArrayOf(0), signature))
     }
+}
