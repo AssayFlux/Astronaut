@@ -25,7 +25,7 @@ object ConversationPromptBuilder {
         var used = 0
         for (turn in turns.asReversed()) {
             val role = if (turn.role == "assistant") "Assistant" else "User"
-            val content = turn.content.takeLast(MAX_MESSAGE_CHARS)
+            val content = turn.content.take(MAX_MESSAGE_CHARS)
             val block = "$role: $content\n"
             if (used + block.length > budget) {
                 if (newestFirst.isEmpty() && turn.role == "user") {
