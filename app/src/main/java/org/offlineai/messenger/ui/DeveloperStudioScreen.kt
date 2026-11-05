@@ -50,7 +50,7 @@ fun DeveloperStudioScreen() {
         }
         walk(root, "", 0)
         files = result
-        status = "Showing \${result.size} files · folder-scoped access only"
+        status = "Showing ${result.size} files · folder-scoped access only"
     }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
@@ -87,8 +87,8 @@ fun DeveloperStudioScreen() {
                                         require(bytes.none { it == 0.toByte() }) { "Binary files cannot be opened in the text editor." }
                                         bytes.toString(Charsets.UTF_8)
                                     }
-                                    editorText = text; dirty = false; status = "Opened \${item.relativePath}"
-                                } catch (e: Throwable) { status = "Cannot edit file: \${e.message}" } finally { busy = false }
+                                    editorText = text; dirty = false; status = "Opened ${item.relativePath}"
+                                } catch (e: Throwable) { status = "Cannot edit file: ${e.message}" } finally { busy = false }
                             }
                         }
                     }, modifier = Modifier.fillMaxWidth()) { Text(item.relativePath, maxLines = 2, style = MaterialTheme.typography.labelSmall) }
@@ -106,8 +106,8 @@ fun DeveloperStudioScreen() {
                                 context.contentResolver.openOutputStream(item.document.uri, "wt")?.use { it.write(editorText.toByteArray(Charsets.UTF_8)); it.flush() }
                                     ?: error("Cannot write selected file")
                             }
-                            dirty = false; status = "Saved \${item.relativePath}"
-                        } catch (e: Throwable) { status = "Save failed: \${e.message}" } finally { busy = false }
+                            dirty = false; status = "Saved ${item.relativePath}"
+                        } catch (e: Throwable) { status = "Save failed: ${e.message}" } finally { busy = false }
                     }
                 }, enabled = selected != null && dirty && !busy, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Save, null); Spacer(Modifier.width(6.dp)); Text("Save changes")
