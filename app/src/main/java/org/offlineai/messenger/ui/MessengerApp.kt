@@ -44,6 +44,7 @@ import org.offlineai.messenger.ai.ModelDescriptor
 import org.offlineai.messenger.data.*
 import org.offlineai.messenger.features.OfflineDocumentReader
 import org.offlineai.messenger.features.OfflineImageAnalyzer
+import org.offlineai.messenger.features.VisionImagePreprocessor
 import org.offlineai.messenger.features.LocalRagIndex
 import org.offlineai.messenger.features.OnnxWordPieceEmbedder
 import org.offlineai.messenger.features.PersistentHybridRag
@@ -101,6 +102,9 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  var embeddingModelPath by remember{mutableStateOf(embeddingPrefs.getString("model_path",null))}
  var embeddingVocabPath by remember{mutableStateOf(embeddingPrefs.getString("vocab_path",null))}
  var embeddingStatus by remember{mutableStateOf("Optional: import a MiniLM-compatible ONNX model and its vocab.txt to enable semantic retrieval.")}
+ val visionPrefs=remember(context){context.getSharedPreferences("astronaut_vision_models",Context.MODE_PRIVATE)}
+ var visionModelPath by remember{mutableStateOf(visionPrefs.getString("vision_model_path",null))}
+ var activeModelVision by remember{mutableStateOf(false)}
  val conversations by db.chatDao().conversations().collectAsState(initial=emptyList())
  val models by db.modelDao().models().collectAsState(initial=emptyList())
  val projects by db.workspaceDao().projects().collectAsState(initial=emptyList())
@@ -227,12 +231,15 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
           val extractedText=try {
            reader.read(selected.first,mime,displayName=selected.second)
           } finally { reader.close() }
-          val imageFile=selected.second.lowercase().let{name->listOf(".png",".jpg",".jpeg",".webp",".bmp",".gif").any(name::endsWith)}
-          val imageLabels=if(mime?.startsWith("image/")==true||imageFile){
+          val imageFile=selected.second.lowercase().let{name->listOf(".png",".jpg",".jpeg",".webp",".bmp",".gif",".heic",".heif").any(name::endsWith)}
+          val isImage=mime?.startsWith("image/")==true||imageFile
+          val imageLabels=if(isImage){
            val analyzer=OfflineImageAnalyzer(context)
            try{analyzer.analyze(selected.first)}finally{analyzer.close()}
           }else ""
-          listOf(extractedText,imageLabels).filter{it.isNotBlank()}.joinToString("\n\n").take(100_000).also{require(it.isNotBlank()){"No readable text or image labels were found."}}
+          val combined=listOf(extractedText,imageLabels).filter{it.isNotBlank()}.joinToString("\n\n").take(100_000)
+          if(isImage)combined.ifBlank{"Image attachment: "+selected.second+". Visual pixels can be analyzed when a compatible vision model is enabled."}
+          else combined.also{require(it.isNotBlank()){"No readable text was found in this attachment."}}
          }
          if(extractedAttachment!=null) db.chatDao().updateAttachmentText(userMessageId,extractedAttachment)
          if(messages.isEmpty()&&(text.isNotEmpty()||attachment!=null)) db.chatDao().rename(target,(text.ifBlank{attachment?.second.orEmpty()}).take(42))
@@ -275,7 +282,23 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
             messages.filter{it.status=="complete"}.map{PromptTurn(it.role,it.body)},
             augmentedQuestion
            )
-           val answer=runtime.generate(prompt)
+           val selectedImage=attachment?.takeIf{selected->
+            val mime=context.contentResolver.getType(selected.first)
+            mime?.startsWith("image/")==true||selected.second.lowercase().let{name->
+             listOf(".png",".jpg",".jpeg",".webp",".bmp",".gif",".heic",".heif").any(name::endsWith)
+            }
+           }
+           val answer=if(selectedImage!=null&&activeModelVision){
+            val prepared=withContext(Dispatchers.IO){
+             VisionImagePreprocessor.prepare(context,selectedImage.first,selectedImage.second)
+            }
+            try{runtime.generateWithImage(prepared.absolutePath,prompt)}
+            finally{prepared.delete()}
+           }else{
+            val safePrompt=if(selectedImage!=null)prompt+"\n\nImportant limitation: no compatible vision-language model is enabled for this chat. You may use the extracted OCR text and visible-label hints above, but do not claim to have visually inspected the image."
+            else prompt
+            runtime.generate(safePrompt)
+           }
            db.chatDao().addMessage(MessageEntity(conversationId=target,body=answer.ifBlank{"The model returned an empty response."},role="assistant"))
           }catch(error:Throwable){db.chatDao().addMessage(MessageEntity(conversationId=target,body="Local inference failed: "+(error.message?:error.javaClass.simpleName),role="assistant",status="error"))}
          }
@@ -358,11 +381,16 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
      {model->
 
      if(model.modelPath!=null){loadingModel=true;scope.launch{
-      try{runtime.load(model.modelPath);activeModelPath=model.modelPath;activeModelName=model.displayName;runtimeMessage="Loaded "+model.displayName+". Chat is ready offline."}
-      catch(error:Throwable){activeModelPath=null;activeModelName=null;runtimeMessage="Could not load model: "+(error.message?:error.javaClass.simpleName)}
+      try{val visionEnabled=model.modelPath==visionModelPath;runtime.load(model.modelPath,enableVision=visionEnabled);activeModelPath=model.modelPath;activeModelName=model.displayName;activeModelVision=visionEnabled;runtimeMessage=if(visionEnabled)"Loaded "+model.displayName+" with local image input enabled." else "Loaded "+model.displayName+". Text chat is ready offline."}
+      catch(error:Throwable){activeModelPath=null;activeModelName=null;activeModelVision=false;runtimeMessage="Could not load model: "+(error.message?:error.javaClass.simpleName)}
       finally{loadingModel=false}
      }}
-    },{model->scope.launch{if(activeModelPath==model.modelPath){runtime.unload();activeModelPath=null;activeModelName=null};model.modelPath?.let{File(it).delete()};db.modelDao().remove(model.uri)}})
+    },{model->scope.launch{if(activeModelPath==model.modelPath){runtime.unload();activeModelPath=null;activeModelName=null;activeModelVision=false};if(visionModelPath==model.modelPath){visionPrefs.edit().remove("vision_model_path").apply();visionModelPath=null};model.modelPath?.let{File(it).delete()};db.modelDao().remove(model.uri)}},visionModelPath,{path->
+      val next=if(visionModelPath==path)null else path
+      visionPrefs.edit().putString("vision_model_path",next).apply()
+      visionModelPath=next
+      if(activeModelPath==path){scope.launch{runtime.unload();activeModelPath=null;activeModelName=null;activeModelVision=false;runtimeMessage="Vision setting changed. Reload this model to apply it."}}
+     })
     Section.TRAINING->TrainingLabScreen(
      datasetName,datasetReport,datasetStatus,datasetBusy,trainingJob,trainingStatus,trainingBusy,
      {datasetPicker.launch(arrayOf("*/*"))},
@@ -459,7 +487,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
  }
 }
 
-@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,embeddingReady:Boolean,embeddingStatus:String,onImportEmbeddingModel:()->Unit,onImportEmbeddingVocab:()->Unit,onImport:()->Unit,onDownload:(String,String,String)->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit){
+@Composable private fun ModelsScreen(models:List<LocalModelEntity>,activePath:String?,activeName:String?,status:String,loading:Boolean,downloading:Boolean,downloadProgress:Float,downloadStatus:String,embeddingReady:Boolean,embeddingStatus:String,onImportEmbeddingModel:()->Unit,onImportEmbeddingVocab:()->Unit,onImport:()->Unit,onDownload:(String,String,String)->Unit,onLoad:(LocalModelEntity)->Unit,onRemove:(LocalModelEntity)->Unit,visionModelPath:String?,onEnableVision:(String)->Unit){
  Column(Modifier.fillMaxSize().padding(16.dp)){
   Text("On-device model library",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.SemiBold)
   Text("Import a .litertlm model. Model files stay in app-private storage and are not included in the APK.",color=Muted)
@@ -491,8 +519,10 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){items(models,key={it.uri}){model->Card{Column(Modifier.fillMaxWidth().padding(14.dp)){
    Text(model.displayName,fontWeight=FontWeight.SemiBold,maxLines=2,overflow=TextOverflow.Ellipsis)
    Text(formatBytes(model.sizeBytes),color=Muted,style=MaterialTheme.typography.labelSmall)
+   Text("Vision input is available only for compatible multimodal .litertlm models. Enable this only when the model publisher confirms image support.",color=Muted,style=MaterialTheme.typography.bodySmall)
    Row(verticalAlignment=Alignment.CenterVertically){
     if(activePath==model.modelPath)Text("ACTIVE · "+activeName,color=Green,modifier=Modifier.weight(1f),style=MaterialTheme.typography.labelSmall) else Spacer(Modifier.weight(1f))
+    TextButton(onClick={model.modelPath?.let(onEnableVision)?:Unit},enabled=model.modelPath!=null){Text(if(model.modelPath==visionModelPath)"Vision enabled" else "Enable vision")}
     TextButton(onClick={onRemove(model)}){Text("Remove")}
     Button(onClick={onLoad(model)},enabled=!loading&&model.modelPath!=null){Text(if(activePath==model.modelPath)"Reload" else "Load model")}
    }
