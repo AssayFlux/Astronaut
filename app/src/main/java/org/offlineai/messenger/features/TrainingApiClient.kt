@@ -97,6 +97,7 @@ class TrainingApiClient(
         val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method
+            connection.instanceFollowRedirects = false
             connection.connectTimeout = 20_000
             connection.readTimeout = 45_000
             connection.setRequestProperty("Accept", "application/json")
