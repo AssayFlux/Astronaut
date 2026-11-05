@@ -20,7 +20,23 @@ data class OfflineTtsVoice(
     val languageTag: String,
     val quality: Int
 ) {
-    val label: String get() = "$languageTag · $name"
+    val label: String get() {
+        val locale = Locale.forLanguageTag(languageTag)
+        val language = locale.getDisplayLanguage(Locale.getDefault())
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+        val region = locale.getDisplayCountry(Locale.getDefault())
+        val qualityLabel = when {
+            quality >= 400 -> "High quality"
+            quality >= 300 -> "Standard quality"
+            quality > 0 -> "Basic quality"
+            else -> "Default quality"
+        }
+        return buildString {
+            append(language.ifBlank { "Unknown language" })
+            if (region.isNotBlank()) append(" (").append(region).append(")")
+            append(" · ").append(qualityLabel)
+        }
+    }
 }
 
 data class OfflineRecognitionLanguages(
