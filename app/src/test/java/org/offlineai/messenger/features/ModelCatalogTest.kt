@@ -37,6 +37,24 @@ class ModelCatalogTest {
         assertEquals(1048576L, model.sizeBytes)
     }
 
+
+    @Test fun acceptsGgufCatalogEntriesAndArtifactsLargerThanEightGiB() {
+        val gguf = modelJson()
+            .replace("chat-small.litertlm", "chat-small.gguf")
+            .replace("\"format\":\"litertlm\",\"runtime\":\"litertlm\"", "\"format\":\"gguf\",\"runtime\":\"llama.cpp\"")
+            .replace("\"size_bytes\":1048576", "\"size_bytes\":9000000000")
+        val model = ModelCatalogParser.parseVerifiedPayload(payload(gguf)).models.single()
+        assertEquals("gguf", model.format)
+        assertEquals("llama.cpp", model.runtime)
+        assertEquals(9_000_000_000L, model.sizeBytes)
+    }
+
+    @Test fun rejectsArtifactsAboveFifteenGb() {
+        val oversized = modelJson().replace("\"size_bytes\":1048576", "\"size_bytes\":15000000001")
+        val error = runCatching { ModelCatalogParser.parseVerifiedPayload(payload(oversized)) }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+    }
+
     @Test fun rejectsNonHttpsDownload() {
         val error = runCatching {
             ModelCatalogParser.parseVerifiedPayload(payload(modelJson(url="http://models.example.org/model.litertlm")))
