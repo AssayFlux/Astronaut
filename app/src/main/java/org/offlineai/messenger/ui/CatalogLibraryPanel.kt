@@ -2,6 +2,8 @@ package org.offlineai.messenger.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -51,11 +53,17 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
         Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         entries.forEach { entry ->
             val check = compatibility[entry.id]
+            var licenseAccepted by remember(entry.id, entry.version) { mutableStateOf(false) }
+            val installedVersions = remember(entry.id) { mutableStateListOf<InstalledModelVersion>().apply { addAll(ModelInstallStore(context).list(entry.id)) } }
+            val activeInstalled = installedVersions.firstOrNull { it.active }
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(entry.name, fontWeight = FontWeight.SemiBold)
                     Text("\${entry.publisher} · \${entry.version} · \${entry.architecture} · \${entry.quantization}", style = MaterialTheme.typography.labelSmall)
                     Text(entry.description, style = MaterialTheme.typography.bodySmall)
+                    if (activeInstalled != null) Text("Installed version: ${activeInstalled.version}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                    TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(entry.licenseUrl))) }) { Text("Read model license") }
+                    Row { Checkbox(checked = licenseAccepted, onCheckedChange = { licenseAccepted = it }); Text("I have reviewed and accept this model license", modifier = Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodySmall) }
                     Text("\${entry.license} · \${entry.sizeBytes / (1024 * 1024)} MiB · \${entry.capabilities.joinToString()}", style = MaterialTheme.typography.labelSmall)
                     if (check != null && !check.compatible) check.reasons.forEach { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     else if (check?.compatible == true) Text("Compatible with this device", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
@@ -71,9 +79,19 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
                                 status = "Install failed: \${e.message ?: e.javaClass.simpleName}"
                             } finally { installing = null }
                         }
-                    }, enabled = check?.compatible == true && installing == null) {
+                    }, enabled = check?.compatible == true && installing == null && licenseAccepted && activeInstalled?.version != entry.version) {
                         if (installing == entry.id) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Default.Download, null)
-                        Spacer(Modifier.width(6.dp)); Text(if (installing == entry.id) "Installing…" else "Download and install")
+                        Spacer(Modifier.width(6.dp)); Text(if (installing == entry.id) "Installing…" else if (activeInstalled != null) "Update model" else "Download and install")
+                    }
+                    if (installedVersions.count { !it.active } > 0) {
+                        OutlinedButton(onClick = {
+                            try {
+                                val rolledBack = ModelInstallStore(context).rollback(entry.id)
+                                installedVersions.clear(); installedVersions.addAll(ModelInstallStore(context).list(entry.id))
+                                onInstalled(entry, rolledBack.file)
+                                status = "Rolled back ${entry.id} to ${rolledBack.version}."
+                            } catch (e: Throwable) { status = "Rollback failed: ${e.message}" }
+                        }, enabled = installing == null) { Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text("Rollback to previous version") }
                     }
                 }
             }
