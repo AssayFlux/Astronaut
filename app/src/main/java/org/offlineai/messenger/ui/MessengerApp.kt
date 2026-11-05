@@ -38,6 +38,7 @@ import org.offlineai.messenger.ai.ModelCatalog
 import org.offlineai.messenger.ai.ModelDescriptor
 import org.offlineai.messenger.data.*
 import org.offlineai.messenger.features.OfflineDocumentReader
+import org.offlineai.messenger.features.OfflineImageAnalyzer
 import org.offlineai.messenger.features.LocalRagIndex
 import org.offlineai.messenger.features.OfflineVoiceController
 import java.io.File
@@ -128,10 +129,17 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
         try{
          val userMessageId=db.chatDao().addMessage(MessageEntity(conversationId=target,body=text,role="user",attachmentUri=attachment?.first?.toString(),attachmentName=attachment?.second))
          val extractedAttachment = attachment?.let { selected ->
+          val mime=context.contentResolver.getType(selected.first)
           val reader = OfflineDocumentReader(context)
-          try {
-           reader.read(selected.first,context.contentResolver.getType(selected.first),displayName=selected.second).take(100_000)
+          val extractedText=try {
+           reader.read(selected.first,mime,displayName=selected.second)
           } finally { reader.close() }
+          val imageFile=selected.second.lowercase().let{name->listOf(".png",".jpg",".jpeg",".webp",".bmp",".gif").any(name::endsWith)}
+          val imageLabels=if(mime?.startsWith("image/")==true||imageFile){
+           val analyzer=OfflineImageAnalyzer(context)
+           try{analyzer.analyze(selected.first)}finally{analyzer.close()}
+          }else ""
+          listOf(extractedText,imageLabels).filter{it.isNotBlank()}.joinToString("\\n\\n").take(100_000).also{require(it.isNotBlank()){"No readable text or image labels were found."}}
          }
          if(extractedAttachment!=null) db.chatDao().updateAttachmentText(userMessageId,extractedAttachment)
          if(messages.isEmpty()&&(text.isNotEmpty()||attachment!=null)) db.chatDao().rename(target,(text.ifBlank{attachment?.second.orEmpty()}).take(42))
