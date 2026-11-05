@@ -101,11 +101,23 @@ object ModelCatalogParser {
     private fun parseEntry(json: JSONObject): ModelCatalogEntry {
         val id = json.getString("id")
         require(idPattern.matches(id)) { "Invalid model ID: $id" }
-        val name = json.getString("name").trim()\n        val publisher = json.getString("publisher").trim()\n        val version = json.getString("version")\n        require(name.isNotEmpty() && name.length <= 160) { "Model $id has an invalid display name." }\n        require(publisher.isNotEmpty() && publisher.length <= 120) { "Model $id has an invalid publisher name." }\n        require(version.matches(Regex("^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"))) { "Model $id has an invalid version." }\n        val sha = json.getString("sha256")
+        val name = json.getString("name").trim()
+        val publisher = json.getString("publisher").trim()
+        val version = json.getString("version")
+        require(name.isNotEmpty() && name.length <= 160) { "Model $id has an invalid display name." }
+        require(publisher.isNotEmpty() && publisher.length <= 120) { "Model $id has an invalid publisher name." }
+        require(version.matches(Regex("^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"))) {
+            "Model $id has an invalid version."
+        }
+
+        val sha = json.getString("sha256")
         require(shaPattern.matches(sha)) { "Model $id has an invalid SHA-256 checksum." }
         val download = json.getString("download_url")
         val licenseUrl = json.getString("license_url")
-        require(isHttps(download) && isHttps(licenseUrl)) { "Model $id must use HTTPS for downloads and license links." }
+        require(isHttps(download) && isHttps(licenseUrl)) {
+            "Model $id must use HTTPS for downloads and license links."
+        }
+
         val fileName = json.getString("file_name")
         require(fileName.matches(Regex("^[A-Za-z0-9._-]{1,120}$")) && fileName.contains('.')) {
             "Model $id must reference a safe filename with an extension."
@@ -122,27 +134,61 @@ object ModelCatalogParser {
             "sherpa_onnx" to ("sherpa-onnx" to setOf(".onnx", ".zip"))
         )
         val spec = allowed[format] ?: error("Unsupported artifact format for $id: $format")
-        require(runtime == spec.first) { "Format $format requires runtime " + spec.first + ", not $runtime." }
+        require(runtime == spec.first) {
+            "Format $format requires runtime ${spec.first}, not $runtime."
+        }
         require(spec.second.any { fileName.endsWith(it, ignoreCase = true) }) {
             "Filename extension does not match declared format $format."
         }
+
         val size = json.getLong("size_bytes")
         require(size in 1..15_000_000_000L) { "Model $id exceeds the 15 GB integration limit." }
         val minSdk = json.getInt("min_sdk")
         val minRam = json.getInt("min_ram_mb")
-        require(minSdk in 26..100 && minRam in 256..262144) { "Invalid device requirements for $id." }
+        require(minSdk in 26..100 && minRam in 256..262144) {
+            "Invalid device requirements for $id."
+        }
+
         val capabilitiesJson = json.getJSONArray("capabilities")
-        val capabilities = (0 until capabilitiesJson.length()).map {
+        require(capabilitiesJson.length() in 1..ModelCapability.entries.size) {
+            "Model $id must declare a bounded non-empty capability list."
+        }
+        val capabilityValues = (0 until capabilitiesJson.length()).map {
             ModelCapability.valueOf(capabilitiesJson.getString(it).uppercase())
-        }.toSet()
-        require(capabilities.isNotEmpty()) { "Model $id must declare at least one capability." }
+        }
+        require(capabilityValues.distinct().size == capabilityValues.size) {
+            "Model $id contains duplicate capabilities."
+        }
+        val capabilities = capabilityValues.toSet()
+
+        val architecture = json.getString("architecture").trim()
+        val quantization = json.getString("quantization").trim()
+        require(architecture.isNotEmpty() && architecture.length <= 80) {
+            "Model $id has an invalid architecture."
+        }
+        require(quantization.isNotEmpty() && quantization.length <= 40) {
+            "Model $id has an invalid quantization."
+        }
+
         return ModelCatalogEntry(
-            id=id, name=json.getString("name"), publisher=json.getString("publisher"),
-            version=json.getString("version"), description=json.optString("description"),
-            license=json.getString("license"), licenseUrl=licenseUrl, downloadUrl=download,
-            sha256=sha, fileName=fileName, format=format, runtime=runtime, minSdk=minSdk,
-            minRamMb=minRam, sizeBytes=size, capabilities=capabilities,
-            architecture=json.getString("architecture").trim().also { require(it.isNotEmpty() && it.length <= 80) { "Model $id has an invalid architecture." } },\n            quantization=json.getString("quantization").trim().also { require(it.isNotEmpty() && it.length <= 40) { "Model $id has an invalid quantization." } }
+            id = id,
+            name = name,
+            publisher = publisher,
+            version = version,
+            description = json.optString("description").take(2000),
+            license = json.getString("license"),
+            licenseUrl = licenseUrl,
+            downloadUrl = download,
+            sha256 = sha,
+            fileName = fileName,
+            format = format,
+            runtime = runtime,
+            minSdk = minSdk,
+            minRamMb = minRam,
+            sizeBytes = size,
+            capabilities = capabilities,
+            architecture = architecture,
+            quantization = quantization
         )
     }
 
