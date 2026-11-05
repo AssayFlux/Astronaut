@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.offlineai.messenger.BuildConfig
@@ -249,8 +250,13 @@ fun CatalogLibraryPanel(onInstalled: (ModelCatalogEntry, File) -> Unit) {
                                         }
                                         finalizingInstall = true
                                         val store = ModelInstallStore(context)
+                                        val callerJob = currentCoroutineContext()[Job]
                                         val installed = withContext(Dispatchers.IO) {
-                                            store.install(entry, downloaded.file)
+                                            store.install(entry, downloaded.file) {
+                                                if (callerJob?.isActive == false) {
+                                                    throw CancellationException("Model installation was cancelled.")
+                                                }
+                                            }
                                         }
                                         val currentVersions = withContext(Dispatchers.IO) { store.list(entry.id) }
                                         installedVersions.clear()
