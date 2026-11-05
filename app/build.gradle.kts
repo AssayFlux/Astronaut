@@ -4,6 +4,11 @@ plugins {
  id("org.jetbrains.kotlin.plugin.compose")
  id("com.google.devtools.ksp")
 }
+val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
+val releaseStorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+
 android {
  namespace="org.offlineai.messenger"
  compileSdk=35
@@ -14,6 +19,25 @@ android {
   versionCode=6
   versionName="0.5.0"
   testInstrumentationRunner="androidx.test.runner.AndroidJUnitRunner"
+ }
+ signingConfigs {
+  create("release") {
+   if (!releaseKeystorePath.isNullOrBlank()) {
+    storeFile = file(releaseKeystorePath)
+    storePassword = releaseStorePassword
+    keyAlias = releaseKeyAlias
+    keyPassword = releaseKeyPassword
+   }
+  }
+ }
+ buildTypes {
+  getByName("release") {
+   isMinifyEnabled = false
+   if (!releaseKeystorePath.isNullOrBlank() && !releaseStorePassword.isNullOrBlank() &&
+       !releaseKeyAlias.isNullOrBlank() && !releaseKeyPassword.isNullOrBlank()) {
+    signingConfig = signingConfigs.getByName("release")
+   }
+  }
  }
  buildFeatures { compose=true }
  compileOptions { sourceCompatibility=JavaVersion.VERSION_17; targetCompatibility=JavaVersion.VERSION_17 }

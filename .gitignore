@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Android release signing material (never commit)
+*.jks
+*.keystore
+release-key.properties
