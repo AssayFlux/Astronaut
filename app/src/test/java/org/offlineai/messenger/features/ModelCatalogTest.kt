@@ -95,7 +95,7 @@ class ModelCatalogTest {
     }
 
     @Test fun rejectsRuntimeFormatMismatch() {
-        val invalid = modelJson().replace("\\"runtime\\":\\"litertlm\\"", "\\"runtime\\":\\"llama.cpp\\"")
+        val invalid = modelJson().replace(""""runtime":"litertlm"""", """"runtime":"llama.cpp"""")
         val error = runCatching { ModelCatalogParser.parseVerifiedPayload(payload(invalid)) }.exceptionOrNull()
         assertTrue(error is IllegalArgumentException)
     }
@@ -107,8 +107,8 @@ class ModelCatalogTest {
     }
 
     @Test fun rejectsUnknownCapabilitiesAndInvalidDeviceRequirements() {
-        val invalidCapability = modelJson().replace("\\"chat\\",\\"code\\"", "\\"telepathy\\"")
-        val invalidRam = modelJson().replace("\\"min_ram_mb\\":2048", "\\"min_ram_mb\\":128")
+        val invalidCapability = modelJson().replace(""""chat","code"""", """"telepathy"""")
+        val invalidRam = modelJson().replace(""""min_ram_mb":2048"""", """"min_ram_mb":128"""")
         assertTrue(runCatching { ModelCatalogParser.parseVerifiedPayload(payload(invalidCapability)) }.isFailure)
         assertTrue(runCatching { ModelCatalogParser.parseVerifiedPayload(payload(invalidRam)) }.exceptionOrNull() is IllegalArgumentException)
     }
