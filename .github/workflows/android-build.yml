@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   android:
-    name: Unit tests and APKs
+    name: Android unit tests
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -24,31 +24,5 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools'
-      - name: Install Android SDK packages
-        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
       - name: Run Android unit tests
         run: gradle --no-daemon :app:testDebugUnitTest --stacktrace
-      - name: Assemble installable debug APK
-        run: gradle --no-daemon :app:assembleDebug --stacktrace
-      - name: Validate release APK build (unsigned unless signing secrets are configured)
-        run: gradle --no-daemon :app:assembleRelease --stacktrace
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: astronaut-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
-      - name: Upload release APK
-        uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: astronaut-release-apk-unsigned
-          path: app/build/outputs/apk/release/app-release-unsigned.apk
-          if-no-files-found: warn
-          retention-days: 14
