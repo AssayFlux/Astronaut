@@ -714,7 +714,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
   Row(verticalAlignment=Alignment.CenterVertically){
    Column(Modifier.weight(1f)){
     Text("Use online inference",fontWeight=FontWeight.SemiBold)
-    Text("Explicit opt-in. Turning this off returns chat to local inference.",style=MaterialTheme.typography.bodySmall,color=Muted)
+    Text(if(enabled)"STATUS · ON — remote inference is active" else "STATUS · OFF — all chat stays on-device",style=MaterialTheme.typography.bodySmall,color=if(enabled)MaterialTheme.colorScheme.primary else Muted)
    }
    Switch(checked=enabled,onCheckedChange=onToggle,enabled=hasKey&&baseUrl.startsWith("https://")&&modelId.isNotBlank()||enabled)
   }
@@ -829,7 +829,7 @@ private enum class Section(val label:String){CHATS("Chats"),AI_HUB("AI Hub"),MOD
    Text("Vision input is available only for compatible multimodal .litertlm models. Enable this only when the model publisher confirms image support.",color=Muted,style=MaterialTheme.typography.bodySmall)
    Row(verticalAlignment=Alignment.CenterVertically){
     if(activePath==model.modelPath)Text("ACTIVE · "+activeName,color=MaterialTheme.colorScheme.primary,modifier=Modifier.weight(1f),style=MaterialTheme.typography.labelSmall) else Spacer(Modifier.weight(1f))
-    TextButton(onClick={model.modelPath?.let(onEnableVision)?:Unit},enabled=model.modelPath!=null){Text(if(model.modelPath==visionModelPath)"Vision enabled" else "Enable vision")}
+    FilterChip(selected=model.modelPath==visionModelPath,onClick={model.modelPath?.let(onEnableVision)?:Unit},enabled=model.modelPath!=null,label={Text(if(model.modelPath==visionModelPath)"Vision · ON" else "Vision · OFF")},leadingIcon={Icon(if(model.modelPath==visionModelPath)Icons.Default.Visibility else Icons.Default.VisibilityOff,null)})
     TextButton(onClick={onRemove(model)}){Text("Remove")}
     Button(onClick={onLoad(model)},enabled=!loading&&canLoad){Text(if(activePath==model.modelPath)"Reload" else if(canLoad)"Load model" else if(isOnnx)"Embedding artifact" else "Runtime unavailable")}
    }
