@@ -87,6 +87,32 @@ class ModelCatalogTest {
         assertTrue(error is IllegalArgumentException)
     }
 
+    @Test fun rejectsFilenameTraversalAndMismatchedExtensions() {
+        val traversal = modelJson().replace("chat-small.litertlm", "../chat-small.litertlm")
+        val mismatch = modelJson().replace("chat-small.litertlm", "chat-small.gguf")
+        assertTrue(runCatching { ModelCatalogParser.parseVerifiedPayload(payload(traversal)) }.exceptionOrNull() is IllegalArgumentException)
+        assertTrue(runCatching { ModelCatalogParser.parseVerifiedPayload(payload(mismatch)) }.exceptionOrNull() is IllegalArgumentException)
+    }
+
+    @Test fun rejectsRuntimeFormatMismatch() {
+        val invalid = modelJson().replace("\\"runtime\\":\\"litertlm\\"", "\\"runtime\\":\\"llama.cpp\\"")
+        val error = runCatching { ModelCatalogParser.parseVerifiedPayload(payload(invalid)) }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test fun rejectsCredentialBearingDownloadUrls() {
+        val invalid = modelJson(url="https://user:password@models.example.org/chat.litertlm")
+        val error = runCatching { ModelCatalogParser.parseVerifiedPayload(payload(invalid)) }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test fun rejectsUnknownCapabilitiesAndInvalidDeviceRequirements() {
+        val invalidCapability = modelJson().replace("\\"chat\\",\\"code\\"", "\\"telepathy\\"")
+        val invalidRam = modelJson().replace("\\"min_ram_mb\\":2048", "\\"min_ram_mb\\":128")
+        assertTrue(runCatching { ModelCatalogParser.parseVerifiedPayload(payload(invalidCapability)) }.isFailure)
+        assertTrue(runCatching { ModelCatalogParser.parseVerifiedPayload(payload(invalidRam)) }.exceptionOrNull() is IllegalArgumentException)
+    }
+
     @Test fun signedEnvelopeRequiresVerifierApproval() {
         val raw = payload(modelJson())
         val envelope = """{"payload":"${Base64.getEncoder().encodeToString(raw)}","signature":"AQ=="}""".toByteArray()
