@@ -5,6 +5,9 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
+import android.speech.RecognitionSupport
+import android.speech.RecognitionSupportCallback
+import android.speech.ModelDownloadListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
@@ -12,20 +15,43 @@ import android.speech.tts.Voice
 import java.io.Closeable
 import java.util.Locale
 
+data class OfflineTtsVoice(
+    val name: String,
+    val languageTag: String,
+    val quality: Int
+) {
+    val label: String get() = "$languageTag · $name"
+}
+
+data class OfflineRecognitionLanguages(
+    val installed: List<String>,
+    val downloadable: List<String>,
+    val pending: List<String>
+)
+
 /**
- * Uses Android's on-device speech recognizer only (API 31+) and a locally installed
- * TTS voice. It fails closed rather than falling back to network speech services.
+ * Offline-only speech controller.
+ *
+ * ASR uses Android's on-device recognizer exclusively (API 31+). API 33+ can
+ * report installed/supported language packs and request downloads from the
+ * platform recognizer. TTS only selects voices explicitly marked as local.
  */
 class OfflineVoiceController(
     context: Context,
     private val onResult: (String) -> Unit,
     private val onError: (String) -> Unit,
-    private val onListeningChanged: (Boolean) -> Unit = {}
+    private val onListeningChanged: (Boolean) -> Unit = {},
+    initialLanguageTag: String = Locale.getDefault().toLanguageTag(),
+    initialTtsVoiceName: String? = null,
+    private val onVoiceCatalogChanged: (List<OfflineTtsVoice>) -> Unit = {}
 ) : Closeable {
     private val appContext = context.applicationContext
     private var recognizer: SpeechRecognizer? = null
     private var textToSpeech: TextToSpeech? = null
-    private var offlineVoice: Voice? = null
+    private var offlineVoices: List<Voice> = emptyList()
+    private var selectedVoice: Voice? = null
+    private var selectedVoiceName: String? = initialTtsVoiceName
+    private var languageTag: String = normalizeLanguageTag(initialLanguageTag)
     private var closed = false
 
     init {
@@ -35,22 +61,129 @@ class OfflineVoiceController(
                 onError("Text-to-speech could not be initialized.")
                 return@TextToSpeech
             }
-            val voices = textToSpeech?.voices.orEmpty()
-                .filterNot { it.isNetworkConnectionRequired }
-            offlineVoice = voices.firstOrNull { it.locale.language == Locale.getDefault().language }
-                ?: voices.firstOrNull()
-            if (offlineVoice == null) {
-                onError("No offline speech voice is installed. Install an offline voice in Android system settings.")
+            refreshOfflineVoices()
+        }
+    }
+
+    fun setLanguageTag(value: String) {
+        val normalized = normalizeLanguageTag(value)
+        languageTag = normalized
+        val language = Locale.forLanguageTag(normalized).language
+        selectedVoice = offlineVoices.firstOrNull { it.name == selectedVoiceName }
+            ?: offlineVoices.firstOrNull { it.locale.toLanguageTag().equals(normalized, true) }
+            ?: offlineVoices.firstOrNull { it.locale.language.equals(language, true) }
+            ?: offlineVoices.firstOrNull()
+        selectedVoiceName = selectedVoice?.name
+        selectedVoice?.let { textToSpeech?.voice = it }
+    }
+
+    fun setTtsVoice(name: String) {
+        val voice = offlineVoices.firstOrNull { it.name == name }
+            ?: error("The selected offline TTS voice is no longer installed.")
+        selectedVoice = voice
+        selectedVoiceName = voice.name
+        textToSpeech?.voice = voice
+        languageTag = voice.locale.toLanguageTag()
+    }
+
+    fun selectedTtsVoiceName(): String? = selectedVoice?.name
+
+    fun refreshOfflineVoices(): List<OfflineTtsVoice> {
+        val engine = textToSpeech ?: return emptyList()
+        offlineVoices = engine.voices.orEmpty()
+            .filterNot { it.isNetworkConnectionRequired }
+            .sortedWith(compareBy<Voice>({ it.locale.displayName }, { -it.quality }, { it.name }))
+        val language = Locale.forLanguageTag(languageTag).language
+        selectedVoice = offlineVoices.firstOrNull { it.name == selectedVoiceName }
+            ?: offlineVoices.firstOrNull { it.locale.toLanguageTag().equals(languageTag, true) }
+            ?: offlineVoices.firstOrNull { it.locale.language.equals(language, true) }
+            ?: offlineVoices.firstOrNull()
+        selectedVoiceName = selectedVoice?.name
+        selectedVoice?.let { engine.voice = it }
+        val catalog = offlineVoices.map {
+            OfflineTtsVoice(it.name, it.locale.toLanguageTag(), it.quality)
+        }
+        onVoiceCatalogChanged(catalog)
+        return catalog
+    }
+
+    fun checkRecognitionSupport(callback: (OfflineRecognitionLanguages) -> Unit) {
+        if (Build.VERSION.SDK_INT < 33) {
+            onError("Speech language-pack discovery requires Android 13 or newer. On-device recognition still requires Android 12+.")
+            callback(OfflineRecognitionLanguages(emptyList(), emptyList(), emptyList()))
+            return
+        }
+        if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(appContext)) {
+            onError("This device has no on-device speech recognition service.")
+            callback(OfflineRecognitionLanguages(emptyList(), emptyList(), emptyList()))
+            return
+        }
+        try {
+            val service = getOrCreateRecognizer()
+            service.checkRecognitionSupport(recognitionIntent(), appContext.mainExecutor,
+                object : RecognitionSupportCallback() {
+                    override fun onSupportResult(support: RecognitionSupport) {
+                        callback(
+                            OfflineRecognitionLanguages(
+                                support.installedOnDeviceLanguages.sorted(),
+                                support.supportedOnDeviceLanguages.sorted(),
+                                support.pendingOnDeviceLanguages.sorted()
+                            )
+                        )
+                    }
+
+                    override fun onError(error: Int) {
+                        onError("Could not inspect offline speech languages (code $error).")
+                    }
+                }
+            )
+        } catch (error: Throwable) {
+            onError("Could not inspect offline speech languages: ${error.message ?: error.javaClass.simpleName}")
+        }
+    }
+
+    fun downloadRecognitionLanguage(onStatus: (String) -> Unit) {
+        if (Build.VERSION.SDK_INT < 33) {
+            onStatus("Platform-managed language downloads require Android 13 or newer.")
+            return
+        }
+        if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(appContext)) {
+            onStatus("No on-device speech recognizer is installed.")
+            return
+        }
+        try {
+            val service = getOrCreateRecognizer()
+            if (Build.VERSION.SDK_INT >= 34) {
+                service.triggerModelDownload(recognitionIntent(), appContext.mainExecutor,
+                    object : ModelDownloadListener() {
+                        override fun onProgress(progress: Int) {
+                            onStatus("Downloading offline speech language pack: $progress%")
+                        }
+                        override fun onSuccess() {
+                            onStatus("Offline speech language pack is installed.")
+                            checkRecognitionSupport { }
+                        }
+                        override fun onScheduled() {
+                            onStatus("Speech language download was scheduled by Android. Check status again later.")
+                        }
+                        override fun onError(error: Int) {
+                            onStatus("Speech language download failed (code $error).")
+                        }
+                    }
+                )
             } else {
-                textToSpeech?.voice = offlineVoice
+                service.triggerModelDownload(recognitionIntent())
+                onStatus("Android was asked to download this language pack. Check language support again after the system download.")
             }
+        } catch (error: Throwable) {
+            onStatus("Could not request language download: ${error.message ?: error.javaClass.simpleName}")
         }
     }
 
     fun startListening() {
         if (closed) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            onError("Offline speech recognition requires Android 12 or newer on this device.")
+            onError("Offline speech recognition requires Android 12 or newer.")
             return
         }
         if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(appContext)) {
@@ -58,18 +191,10 @@ class OfflineVoiceController(
             return
         }
         try {
-            val service = recognizer ?: SpeechRecognizer.createOnDeviceSpeechRecognizer(appContext).also {
-                it.setRecognitionListener(listener)
-                recognizer = it
+            getOrCreateRecognizer().apply {
+                cancel()
+                startListening(recognitionIntent())
             }
-            service.cancel()
-            val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-            }
-            service.startListening(request)
         } catch (error: Throwable) {
             onListeningChanged(false)
             onError("Could not start offline speech recognition: ${error.message ?: error.javaClass.simpleName}")
@@ -87,12 +212,26 @@ class OfflineVoiceController(
             onError("Speech output is not ready yet.")
             return
         }
-        val voice = offlineVoice ?: run {
-            onError("No offline speech voice is installed.")
+        val voice = selectedVoice ?: run {
+            onError("No offline speech voice is installed. Install a local voice in Android text-to-speech settings.")
             return
         }
         engine.voice = voice
         engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "astronaut-offline-speech")
+    }
+
+    private fun getOrCreateRecognizer(): SpeechRecognizer {
+        return recognizer ?: SpeechRecognizer.createOnDeviceSpeechRecognizer(appContext).also {
+            it.setRecognitionListener(listener)
+            recognizer = it
+        }
+    }
+
+    private fun recognitionIntent() = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
+        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+        putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
     }
 
     private val listener = object : RecognitionListener {
@@ -113,6 +252,8 @@ class OfflineVoiceController(
                     SpeechRecognizer.ERROR_NO_MATCH -> "No speech was recognised. Try again."
                     SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech recognition is busy. Try again shortly."
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech was detected."
+                    SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> "This language is not supported by the on-device recognizer."
+                    SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "This language pack is not installed yet. Download it in Voice settings."
                     else -> "Offline speech recognition failed (code $error)."
                 }
             )
@@ -135,6 +276,18 @@ class OfflineVoiceController(
         runCatching { textToSpeech?.stop() }
         runCatching { textToSpeech?.shutdown() }
         textToSpeech = null
-        offlineVoice = null
+        offlineVoices = emptyList()
+        selectedVoice = null
+    }
+
+    companion object {
+        fun normalizeLanguageTag(value: String): String {
+            require(value.matches(Regex("(?i)^[a-z]{2,8}(-[a-z0-9]{1,8})*$"))) {
+                "Enter a valid BCP-47 language tag, such as en-US, hi-IN or bn-IN."
+            }
+            val locale = Locale.forLanguageTag(value)
+            require(locale.language.isNotBlank()) { "The language tag is not valid." }
+            return locale.toLanguageTag()
+        }
     }
 }
